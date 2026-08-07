@@ -1,5 +1,7 @@
 # PetPet Playbook · 桌宠制作方法论
 
+![CI](https://github.com/stshourenxy-dev/petpet-playbook/actions/workflows/ci.yml/badge.svg)
+
 > 不是"又一个桌宠软件"，是**给心爱的宠物做一只活在电脑里的替身**——用 AI 生成它自己的形象、自己的动作、自己的性格，让它在工作时陪着你。
 
 本仓库是一套**完整的方法论**：从宠物特征收集 → AI 素材生成 → 精灵表管线 → 桌宠实现，全程记录真实决策、真实数据、真实踩坑。

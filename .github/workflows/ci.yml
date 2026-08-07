@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pipeline-test:
+    name: 素材管线测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: 安装依赖（验证 requirements.txt 本身有效）
+        run: pip install -r requirements.txt pytest
+      - name: 冒烟测试
+        run: python tests/smoke_test.py
+      - name: 单元测试（边界情况）
+        run: pytest tests/test_pipeline.py -v
+
+  viewer-build:
+    name: 客户端构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: viewer/package-lock.json
+      - name: 安装依赖
+        run: npm ci
+        working-directory: viewer
+      - name: 构建（vite build）
+        run: npm run build
+        working-directory: viewer
+      - name: 校验构建产物
+        run: test -f dist/index.html && echo "✅ dist/index.html 存在" && ls dist/assets/ | head -5
+        working-directory: viewer
