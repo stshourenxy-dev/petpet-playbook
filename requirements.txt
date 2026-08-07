@@ -1,0 +1,6 @@
+# PetPet Playbook 素材管线依赖（Python 3.9+）
+# 安装：pip install -r requirements.txt
+numpy>=1.24
+Pillow>=10.0
+rembg>=2.0
+scipy>=1.10

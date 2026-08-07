@@ -44,8 +44,10 @@ def make_sheet(input_dir, out_dir, cell=1024, pad_ratio=0.06, name=None):
     target = min(max(max_w, max_h) + pad * 2, cell)
 
     frames_out = []
-    for img, box in zip(imgs, boxes):
+    for i, (img, box) in enumerate(zip(imgs, boxes)):
         if box is None:
+            # 空透明帧：警告而非静默（可能是抠图失败/全透明帧）
+            print(f'⚠️ [{frames[i]}] 未检测到不透明内容（alpha 全透明），生成空白帧')
             canvas = Image.new('RGBA', (target, target), (0, 0, 0, 0))
             frames_out.append(canvas)
             continue

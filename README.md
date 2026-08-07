@@ -17,8 +17,8 @@
 ## 快速开始（跑素材管线）
 
 ```bash
-# 1. 安装依赖
-pip install numpy pillow rembg
+# 1. 安装依赖（numpy/Pillow/rembg/scipy，见 requirements.txt）
+pip install -r requirements.txt
 
 # 2. 按顺序跑（以 12 帧为例）
 python pipeline/select_frames.py --input <抽帧目录> --output selected/ --frames 12
