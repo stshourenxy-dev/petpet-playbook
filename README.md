@@ -4,11 +4,30 @@
 
 本仓库是一套**完整的方法论**：从宠物特征收集 → AI 素材生成 → 精灵表管线 → 桌宠实现，全程记录真实决策、真实数据、真实踩坑。
 
+> ⚠️ **仓库边界**：本仓库覆盖「素材生产」全链路（特征收集 → AI 生成 → 精灵表 → 宠物包）与完整架构方案。桌宠客户端本体需按 04-架构设计 自行实现（Electron + PixiJS，约数百行）。
+
 ---
 
 ![红苕动作演示](assets/demo.gif)
 
 *红苕（一只被做成桌宠的边牧）的 5 个动作演示：睡觉 → 抱熊待机 → 撒娇 → 奔跑 → 伸懒腰。素材由 AI 生成 + rembg 管线制作，全流程见本仓库。*
+
+---
+
+## 快速开始（跑素材管线）
+
+```bash
+# 1. 安装依赖
+pip install numpy pillow rembg
+
+# 2. 按顺序跑（以 12 帧为例）
+python pipeline/select_frames.py --input <抽帧目录> --output selected/ --frames 12
+python pipeline/remove_bg.py     --input selected/ --output cutout/
+python pipeline/clean_cutout.py  --input cutout/   --output clean/
+python pipeline/make_sheet.py    --input clean/    --output . --name mypet.png
+
+# 3. 得到精灵表后，按 08-接口协议 配置 pet.json 部署
+```
 
 ---
 
@@ -94,14 +113,6 @@ docs/
 3. **每步工具可替换**：即梦/rembg/PIL 都不是唯一解
 4. **淘气有边界**：视觉淘气可以，真实文件操作不做
 5. **诚实标注状态**：未实测的功能不宣称已支持
-
----
-
-## License
-
-- 代码：MIT（整理后发布）
-- 素材：即梦 AI 生成，版权归宠物主人；发布需保留平台 AI 标识
-- 红苕素材（examples/redshao/）：仅作教学示例，请勿用于商业用途
 
 ---
 
