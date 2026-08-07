@@ -1,0 +1,280 @@
+/* PetPet 桌宠查看器样式 —— macOS 原生设计语言
+   毛玻璃（vibrancy 质感）+ SF 字体 + 柔和圆角 + 浅色/深色自适应
+   强调色跟随 macOS 系统蓝（浅色 #007AFF / 深色 #0A84FF） */
+
+:root {
+  --accent: #007AFF;
+  --accent-hover: #0066D6;
+  --separator: rgba(60, 60, 67, 0.18);
+  --text-primary: rgba(0, 0, 0, 0.85);
+  --text-secondary: rgba(60, 60, 67, 0.55);
+  --menu-bg: rgba(246, 246, 246, 0.78);
+  --bubble-bg: rgba(255, 255, 255, 0.78);
+  --bar-bg: rgba(246, 246, 246, 0.75);
+  --input-bg: rgba(255, 255, 255, 0.72);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.10);
+  --hover-bg: rgba(0, 122, 255, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: #0A84FF;
+    --accent-hover: #409CFF;
+    --separator: rgba(84, 84, 88, 0.55);
+    --text-primary: rgba(255, 255, 255, 0.92);
+    --text-secondary: rgba(235, 235, 245, 0.5);
+    --menu-bg: rgba(46, 46, 48, 0.78);
+    --bubble-bg: rgba(56, 56, 58, 0.8);
+    --bar-bg: rgba(46, 46, 48, 0.78);
+    --input-bg: rgba(60, 60, 62, 0.8);
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+    --hover-bg: rgba(10, 132, 255, 0.25);
+  }
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+#stage {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ========== 对话气泡（iMessage 风格） ========== */
+#bubble {
+  position: fixed;
+  left: 50%;
+  top: 8px;
+  transform: translateX(-50%);
+  max-width: 200px;
+  padding: 7px 13px;
+  background: var(--bubble-bg);
+  -webkit-backdrop-filter: blur(22px) saturate(1.8);
+  backdrop-filter: blur(22px) saturate(1.8);
+  border: 0.5px solid rgba(255, 255, 255, 0.35);
+  border-radius: 15px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  z-index: 10;
+  text-align: center;
+  white-space: normal;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+#bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 9px;
+  height: 9px;
+  background: var(--bubble-bg);
+  -webkit-backdrop-filter: blur(22px) saturate(1.8);
+  backdrop-filter: blur(22px) saturate(1.8);
+  border-right: 0.5px solid rgba(255, 255, 255, 0.35);
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.35);
+  border-bottom-right-radius: 2px;
+}
+
+#bubble.hidden {
+  display: none;
+}
+
+/* ========== 右键动作菜单（macOS 原生菜单质感） ========== */
+.pet-menu {
+  position: fixed;
+  min-width: 150px;
+  max-height: calc(100vh - 20px);
+  overflow-y: auto;
+  background: var(--menu-bg);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  border: 0.5px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  z-index: 100;
+  padding: 5px;
+  animation: menuIn 0.14s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+@keyframes menuIn {
+  from { opacity: 0; transform: scale(0.96) translateY(-2px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.pet-menu-title {
+  padding: 5px 10px 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.pet-menu-sep {
+  height: 1px;
+  background: var(--separator);
+  margin: 4px 6px;
+}
+
+.pet-menu-item {
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.08s;
+}
+
+.pet-menu-item:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.pet-menu-item.active {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.pet-menu-item.active:hover {
+  color: #fff;
+}
+
+/* ========== 面板（macOS 原生卡片） ========== */
+.panel {
+  position: fixed;
+  background: var(--bar-bg);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  border: 0.5px solid rgba(0, 0, 0, 0.12);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  z-index: 200;
+  padding: 16px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.panel.hidden {
+  display: none;
+}
+
+.panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+#reminder-panel {
+  width: 250px;
+  left: 50%;
+  top: 56px;
+  transform: translateX(-50%);
+}
+
+#reminder-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 11px;
+  border: 0.5px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+#reminder-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.22);
+}
+
+.panel-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.panel-btns {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn {
+  padding: 4px 14px;
+  border: 0.5px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: filter 0.1s, background 0.1s;
+}
+
+.btn:hover {
+  filter: brightness(0.94);
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 500;
+}
+
+.btn.primary:hover {
+  background: var(--accent-hover);
+  filter: none;
+}
+
+/* ========== 提醒到点常显条（macOS 通知横幅风格） ========== */
+#reminder-bar {
+  position: fixed;
+  left: 50%;
+  top: 10px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 300px;
+  background: var(--bar-bg);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  border: 0.5px solid rgba(0, 0, 0, 0.12);
+  border-radius: 11px;
+  padding: 9px 14px;
+  color: var(--text-primary);
+  font-size: 13px;
+  box-shadow: var(--shadow);
+  z-index: 300;
+}
+
+#reminder-bar.hidden {
+  display: none;
+}
+
+#reminder-bar .btn.primary {
+  background: var(--accent);
+  color: #fff;
+  flex-shrink: 0;
+}

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>红苕日记</title>
+  <link rel="stylesheet" href="./panel.css" />
+</head>
+<body>
+  <div class="panel">
+    <div class="head">
+      <span class="title">📖 红苕日记</span>
+      <span id="count" class="count"></span>
+      <button id="close" class="close" title="关闭">✕</button>
+    </div>
+    <div id="status" class="status hidden"></div>
+    <div id="list" class="list"></div>
+  </div>
+  <script src="./panel.js"></script>
+</body>
+</html>

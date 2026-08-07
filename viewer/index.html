@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' data: blob: ws: http://127.0.0.1:5173; worker-src 'self' blob:" />
+  <title>PetPet 桌宠</title>
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <div id="bubble" class="hidden"></div>
+
+  <!-- 方案B：提醒输入面板 -->
+  <div id="reminder-panel" class="panel hidden">
+    <div class="panel-title">⏰ 提醒我</div>
+    <input id="reminder-input" type="text" placeholder="例：一分钟后提醒我喝水" spellcheck="false" />
+    <div class="panel-hint">支持：5分钟后 / 今天下午5点 / 每天早上10点 / 每周五下午5点</div>
+    <div class="panel-btns">
+      <button id="reminder-ok" class="btn primary">设置</button>
+      <button id="reminder-cancel" class="btn">取消</button>
+    </div>
+  </div>
+
+  <!-- 方案B：提醒到点常显条（确认后才消失） -->
+  <div id="reminder-bar" class="hidden">
+    <span id="reminder-text"></span>
+    <button id="reminder-done" class="btn primary">知道了</button>
+  </div>
+
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

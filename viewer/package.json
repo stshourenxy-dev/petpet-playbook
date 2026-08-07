@@ -1,0 +1,41 @@
+{
+  "name": "petpet-viewer",
+  "version": "0.2.0",
+  "description": "PetPet 桌面宠物查看器（Electron + PixiJS v8）",
+  "main": "main.js",
+  "author": "QClaw",
+  "license": "MIT",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on tcp:127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "build": "vite build",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "pixi.js": "^8.6.6"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.4.11",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "wait-on": "^8.0.1"
+  },
+  "productName": "PetPet",
+  "build": {
+    "appId": "com.petpet.desktop",
+    "productName": "PetPet",
+    "files": [
+      "main.js",
+      "preload.cjs",
+      "panel-preload.cjs",
+      "panel.html",
+      "panel.js",
+      "panel.css",
+      "package.json",
+      "dist/**/*",
+      "index.html"
+    ]
+  }
+}

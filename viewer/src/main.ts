@@ -1,0 +1,532 @@
+// PetPet 桌宠查看器 - 渲染引擎（PixiJS v8）
+// 功能：精灵表播放、动作切换、拖拽、缩放、气泡、随机行为
+// 注意：Electron/CSP 环境下必须使用 unsafe-eval 模块（PixiJS v8 依赖）
+import 'pixi.js/unsafe-eval'
+import * as PIXI from 'pixi.js'
+import { parseReminder } from './reminder'
+
+// ================= 类型 =================
+interface PetActionSpec {
+  file?: string
+  sprite?: string
+  frames: number
+  fps?: number
+  loop?: boolean
+  weight?: number
+  pingpong?: boolean
+  frameWidth?: number
+  frameHeight?: number
+  transitions?: Record<string, number>
+}
+
+interface PetJson {
+  version: number
+  id: string
+  name: string
+  theme?: string
+  cellWidth: number
+  cellHeight: number
+  actions: Record<string, PetActionSpec>
+}
+
+declare global {
+  interface Window {
+    petAPI: {
+      listPets: () => Promise<string[]>
+      loadPet: (id: string) => Promise<PetJson>
+      getFile: (id: string, rel: string) => Promise<{ dataUrl?: string; error?: string }>
+      setWindowSize: (w: number, h: number) => void
+      moveWindow: (x: number, y: number) => void
+      setIgnoreMouse: (ignore: boolean, forward?: boolean) => void
+      getWindowPosition: () => Promise<{ x: number; y: number }>
+      onZoom: (cb: (f: number) => void) => void
+      onReset: (cb: () => void) => void
+      onTestAction: (cb: (name: string) => void) => void
+      notifyPetLoaded: (id: string) => void
+      onAction: (cb: (name: string) => void) => void
+      setReminder: (spec: { at: number; repeat: string; text: string }) => Promise<{ id?: string; error?: string }>
+      onReminderFire: (cb: (r: { id: string; text: string }) => void) => void
+      appendActivity: (entry: { petId: string; mood: string; text: string }) => void
+      openDiary: (petId: string) => void
+      setTheme: (petId: string, theme: string) => void
+      onOpenReminder: (cb: () => void) => void
+      onThemeSet: (cb: (theme: string) => void) => void
+      showContextMenu: (x: number, y: number) => Promise<void>
+      listActivity: (petId: string) => Promise<{ ts: number; mood: string; text: string }[]>
+    }
+  }
+}
+
+// ================= 状态 =================
+const app = new PIXI.Application()
+
+let pet: PetJson | null = null
+let petId = 'redshao'
+let sprite: PIXI.AnimatedSprite | null = null
+let textures: Record<string, PIXI.Texture[]> = {}
+let currentAction = 'idle'
+let baseScale = 0.9
+let pingpongDir = 1
+let bubbleTimer: ReturnType<typeof setTimeout> | null = null
+let randomTimer: ReturnType<typeof setInterval> | null = null
+let reminderBarOn = false
+// 渲染进程跟踪的窗口状态（初始 = 主进程创建尺寸/位置；本地维护，避免异步竞态漂移）
+let curWinW = 320
+let curWinH = 320
+let curWinX = 0
+let curWinY = 0
+
+const WINDOW_W = 320
+const WINDOW_H = 320
+const BUBBLE_TEXTS = ['汪！', '摸摸我～', '今天也要开心哦！', '饿了…有吃的吗？', '(*^▽^*)']
+
+// 主题皮肤（pet.json theme 字段）：bro=弟弟(蓝绿) / sis=妹妹(暖粉) / orange=暖橙经典
+const THEME_LABELS: Record<string, string> = {
+  bro: '弟弟款', sis: '妹妹款', orange: '暖橙经典'
+}
+
+// ================= 初始化 =================
+async function init() {
+  await app.init({
+    backgroundAlpha: 0,
+    antialias: true,
+    resizeTo: window,
+    resolution: Math.min(window.devicePixelRatio || 1, 2)
+  })
+  document.getElementById('stage')?.replaceWith(app.canvas)
+  app.canvas.style.width = '100%'
+  app.canvas.style.height = '100%'
+  app.canvas.style.display = 'block'
+
+  // 拖拽移动窗口
+  let dragging = false
+  let startScreen = { x: 0, y: 0 }
+  let winStart = { x: 0, y: 0 }
+
+  app.canvas.addEventListener('pointerdown', async (e) => {
+    dragging = true
+    startScreen = { x: e.screenX, y: e.screenY }
+    winStart = await window.petAPI.getWindowPosition()
+    app.canvas.setPointerCapture(e.pointerId)
+  })
+
+  // 拖拽移动窗口（同步本地位置跟踪，供缩放中心计算使用）
+  app.canvas.addEventListener('pointermove', (e) => {
+    if (!dragging) return
+    const nx = winStart.x + (e.screenX - startScreen.x)
+    const ny = winStart.y + (e.screenY - startScreen.y)
+    curWinX = Math.round(nx)
+    curWinY = Math.round(ny)
+    window.petAPI.moveWindow(Math.round(nx), Math.round(ny))
+  })
+
+  app.canvas.addEventListener('pointerup', () => { dragging = false })
+  app.canvas.addEventListener('pointercancel', () => { dragging = false })
+
+  // 鼠标穿透（借鉴 bitnp）：透明区穿透桌面，宠物区可交互
+  // forward=true 让穿透时仍能收到 mousemove，从而检测鼠标进入宠物区
+  // 方案B：面板/提醒条/菜单打开时，其区域也保持可交互
+  let lastIgnore: boolean | null = null
+  function uiRects() {
+    const out: { x: number; y: number; w: number; h: number }[] = []
+    for (const el of [
+      document.getElementById('reminder-panel'),
+      document.getElementById('reminder-bar')
+    ]) {
+      if (el && !el.classList.contains('hidden')) {
+        const r = el.getBoundingClientRect()
+        out.push({ x: r.x, y: r.y, w: r.width, h: r.height })
+      }
+    }
+    document.querySelectorAll('.pet-menu').forEach(el => {
+      const r = el.getBoundingClientRect()
+      out.push({ x: r.x, y: r.y, w: r.width, h: r.height })
+    })
+    return out
+  }
+  function updateMouseIgnore(e: PointerEvent) {
+    if (dragging) return // 拖拽中强制交互
+    const x = e.clientX
+    const y = e.clientY
+    const onSprite = sprite ? sprite.getBounds().containsPoint(x, y) : false
+    const onUI = uiRects().some(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
+    const shouldIgnore = !(onSprite || onUI)
+    if (shouldIgnore !== lastIgnore) {
+      lastIgnore = shouldIgnore
+      window.petAPI.setIgnoreMouse(shouldIgnore, true)
+    }
+  }
+  app.canvas.addEventListener('pointermove', updateMouseIgnore)
+  // 初始穿透
+  setTimeout(() => window.petAPI.setIgnoreMouse(true, true), 300)
+
+  // 单击 = 互动气泡（桌宠灵魂：点宠物有反应；2026-08-06 用户明确：单击不占用为功能入口）
+  // 功能入口：托盘爪印（红苕日记/提醒/换肤/动作）+ 右键菜单（触控板双指/辅助点按用户）
+  let downPos = { x: 0, y: 0 }
+  let lastPointerUp = 0
+  app.canvas.addEventListener('pointerdown', (e) => { downPos = { x: e.clientX, y: e.clientY } })
+  app.canvas.addEventListener('pointerup', (e) => {
+    lastPointerUp = Date.now()
+    if (e.button !== 0) return // 只处理左键（右键走 contextmenu 菜单）
+    const dist = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y)
+    if (dist < 6) showBubbleText() // 单击 = 互动气泡
+  })
+
+  // 右键 → 原生 macOS 菜单（主进程 Menu.popup，自动毛玻璃/定位）
+  app.canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault()
+    window.petAPI.showContextMenu(e.screenX, e.screenY)
+  })
+
+  // 滚轮/触摸表面缩放（Magic Mouse 表面滑动 = 滚动事件，极易误触）
+  // 三重防误触：
+  // 1. ctrlKey（智能缩放/双指双击）→ 忽略
+  // 2. 点击后 250ms 内的滚动 → 忽略
+  // 3. 累积式：滚动位移累积到阈值才缩放一档（点击抖动 dY<5、短滑、方向抖动都不会触发）
+  let wheelAccum = 0
+  let wheelLastTs = 0
+  const WHEEL_SCROLL_THRESHOLD = 40
+  app.canvas.addEventListener('wheel', (e) => {
+    if (e.ctrlKey) return
+    if (Date.now() - lastPointerUp < 250) return
+    e.preventDefault()
+    const now = Date.now()
+    if (now - wheelLastTs > 300) wheelAccum = 0 // 滚动停顿后重置累积
+    wheelLastTs = now
+    wheelAccum += e.deltaY
+    while (Math.abs(wheelAccum) >= WHEEL_SCROLL_THRESHOLD) {
+      applyZoom(wheelAccum < 0 ? 1.08 : 1 / 1.08)
+      wheelAccum -= Math.sign(wheelAccum) * WHEEL_SCROLL_THRESHOLD
+    }
+  }, { passive: false })
+
+  // 双击 → 恢复默认大小（绝不缩小）
+  app.canvas.addEventListener('dblclick', (e) => {
+    e.preventDefault()
+    resetZoom()
+  })
+
+  // 托盘事件
+  window.petAPI.onZoom((f) => applyZoom(f))
+  window.petAPI.onReset(() => resetZoom())
+
+  // 测试：切换动作
+  window.petAPI.onTestAction((name) => playAction(name))
+
+  // 托盘菜单切换动作（7/31 恢复旧版功能）
+  window.petAPI.onAction((name) => playAction(name))
+
+  // 记录初始窗口位置（缩放中心计算基准）
+  try {
+    const pos = await window.petAPI.getWindowPosition()
+    curWinX = pos.x
+    curWinY = pos.y
+  } catch (err) {
+    console.error('获取窗口位置失败', err)
+  }
+
+  await loadPet(petId)
+  setupUI()
+  startRandomBehavior()
+}
+
+// ================= 宠物加载 =================
+async function loadPet(id: string) {
+  petId = id
+  const data = await window.petAPI.loadPet(id)
+  if (!data || data.error) {
+    console.error('加载宠物失败', data)
+    return
+  }
+  pet = data
+  textures = {}
+  // 主题皮肤：bro=弟弟(蓝绿) / sis=妹妹(暖粉)，跟随 pet.json 的 theme 字段
+  document.body.dataset.theme = pet.theme || 'bro'
+  // 通知主进程当前宠物（托盘动作菜单用）
+  window.petAPI.notifyPetLoaded(id)
+
+  // 并行预加载所有动作精灵表
+  await Promise.all(
+    Object.entries(pet.actions).map(async ([name, act]) => {
+      const rel = act.file || act.sprite
+      if (!rel) return
+      const res = await window.petAPI.getFile(petId, rel)
+      if (!res.dataUrl) {
+        console.warn(`动作 ${name} 精灵表加载失败: ${res.error}`)
+        return
+      }
+      try {
+        const tex = await PIXI.Assets.load(res.dataUrl)
+        const cw = act.frameWidth || pet!.cellWidth
+        const ch = act.frameHeight || pet!.cellHeight
+        const cols = Math.max(1, Math.floor(tex.width / cw))
+        const frames: PIXI.Texture[] = []
+        for (let i = 0; i < act.frames; i++) {
+          const col = i % cols
+          frames.push(new PIXI.Texture({
+            source: tex.source,
+            frame: new PIXI.Rectangle(col * cw, 0, cw, ch)
+          }))
+        }
+        textures[name] = frames
+      } catch (err) {
+        console.error(`动作 ${name} 纹理切片失败`, err)
+      }
+    })
+  )
+
+  const firstAction = Object.keys(pet.actions)[0] || 'idle'
+  playAction(firstAction)
+  updateTitle()
+}
+
+function updateTitle() {
+  if (pet) document.title = `PetPet - ${pet.name}`
+}
+
+// ================= 动作播放 =================
+function playAction(name: string) {
+  if (!pet || !textures[name] || textures[name].length === 0) return
+  // 方案B：切换到非 idle 动作时记入红苕日记（同动作重复切换不重复记）
+  if (name !== 'idle' && name !== currentAction) logActionActivity(name)
+  // 动作切换 → 通知主进程同步日记「当前状态」（idle 也用固定文案）
+  const actT = ACTIVITY_TEXTS[name]
+  window.petAPI.notifyAction(actT
+    ? { mood: actT.mood, text: actT.text }
+    : { mood: '待机', text: '红苕安安静静地待着，等你来摸～' })
+  const act = pet.actions[name]
+  const frames = textures[name]
+
+  if (sprite) {
+    sprite.destroy()
+    sprite = null
+  }
+
+  sprite = new PIXI.AnimatedSprite(frames)
+  sprite.anchor.set(0.5)
+  sprite.animationSpeed = (act.fps || 4) / 60
+  sprite.loop = act.loop !== false
+  pingpongDir = 1
+
+  if (act.pingpong) {
+    // 往返播放：播完一 cycle 反向
+    sprite.on('loop', () => {
+      if (!sprite) return
+      pingpongDir *= -1
+      sprite.animationSpeed = Math.abs(sprite.animationSpeed) * pingpongDir
+    })
+  }
+
+  app.stage.addChild(sprite)
+  currentAction = name
+  applyScale()
+  sprite.play()
+}
+
+// 缩放约束：0.5x ~ 2x（窗口跟随缩放，永远完整显示全身，不裁切）
+const ZOOM_MIN = 0.5
+const ZOOM_MAX = 2
+
+async function applyScale() {
+  if (!sprite) return
+  // 8/5 v2：窗口尺寸只随缩放（baseScale）变化，与动作无关 → 切换动作零跳变（修复"切换时窗口闪烁/动作消失"感）
+  const fw = sprite.textures[0]?.width || pet?.cellWidth || 250
+  const fh = sprite.textures[0]?.height || pet?.cellHeight || 250
+  const fit = Math.min(WINDOW_W / fw, WINDOW_H / fh)  // 固定 320 基准，不随窗口变化
+  const act = pet?.actions?.[currentAction] || {}
+  const actScale = act.scale || 1
+
+  // 窗口 = 初始尺寸 × baseScale（与动作无关）
+  const newW = Math.max(60, Math.round(WINDOW_W * baseScale))
+  const newH = Math.max(60, Math.round(WINDOW_H * baseScale))
+  sprite.scale.set(baseScale * fit * actScale)
+  sprite.position.set(newW / 2, newH / 2)
+
+  const newX = Math.round(curWinX + (curWinW - newW) / 2)
+  const newY = Math.round(curWinY + (curWinH - newH) / 2)
+  window.petAPI.moveWindow(newX, newY)
+  window.petAPI.setWindowSize(newW, newH)
+  curWinX = newX
+  curWinY = newY
+  curWinW = newW
+  curWinH = newH
+}
+
+function applyZoom(factor: number) {
+  const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, baseScale * factor))
+  baseScale = next
+  applyScale()
+}
+
+function resetZoom() {
+  baseScale = 0.9
+  applyScale()
+}
+
+// ================= 气泡 =================
+function showBubbleText(text?: string) {
+  const bubble = document.getElementById('bubble')!
+  bubble.textContent = text || BUBBLE_TEXTS[Math.floor(Math.random() * BUBBLE_TEXTS.length)]
+  bubble.classList.remove('hidden')
+  bubble.style.left = '50%'
+  bubble.style.top = '8px'
+  bubble.style.transform = 'translateX(-50%)'
+
+  if (bubbleTimer) clearTimeout(bubbleTimer)
+  bubbleTimer = setTimeout(() => {
+    bubble.classList.add('hidden')
+  }, 6000)
+}
+
+// ================= 红苕日记（方案B） =================
+// 动作 → 心情 + 红苕式文案（红苕 = 公狗，棕白皮克斯风；knead 踩奶为红苕专属动作，文案必须保留动作名）
+const ACTIVITY_TEXTS: Record<string, { mood: string; text: string }> = {
+  sleep:   { mood: '安逸', text: '红苕蜷成一团睡着了，呼噜声轻轻的。' },
+  sniff:   { mood: '好奇', text: '红苕凑近嗅了嗅，鼻头湿漉漉的。' },
+  wiggle:  { mood: '开心', text: '红苕扭着屁股撒欢，尾巴摇成小风扇。' },
+  run:     { mood: '兴奋', text: '红苕嗖地窜了出去，一溜烟就没影了。' },
+  knead:   { mood: '满足', text: '红苕踩奶踩得入迷，前爪一按一按的。' },
+  belly:   { mood: '惬意', text: '红苕翻出肚皮晒太阳，毫无防备。' },
+  poop:    { mood: '心虚', text: '红苕先转着圈圈踩好位置，解决完就撒欢跑开了。' },
+  stretch: { mood: '舒坦', text: '红苕伸了个大大的懒腰，爪子张得开花。' }
+}
+
+function logActionActivity(name: string) {
+  const t = ACTIVITY_TEXTS[name]
+  if (!t) return
+  window.petAPI.appendActivity({ petId, mood: t.mood, text: t.text })
+}
+
+function fmtTime(ts: number): string {
+  const d = new Date(ts)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+// ================= 提醒系统（方案B） =================
+function openReminderPanel() {
+  document.getElementById('reminder-panel')!.classList.remove('hidden')
+  const input = document.getElementById('reminder-input') as HTMLInputElement
+  input.value = ''
+  input.focus()
+}
+
+function closeReminderPanel() {
+  document.getElementById('reminder-panel')!.classList.add('hidden')
+}
+
+async function submitReminder() {
+  const input = document.getElementById('reminder-input') as HTMLInputElement
+  const raw = input.value.trim()
+  if (!raw) return
+  const spec = parseReminder(raw)
+  if (!spec) {
+    showBubbleText('我听不懂这个时间…试试「一分钟后提醒我喝水」')
+    return
+  }
+  const res = await window.petAPI.setReminder({ at: spec.at, repeat: spec.repeat, text: spec.text })
+  if (res && res.error) {
+    showBubbleText('这个时间有点奇怪，换个说法试试？')
+    return
+  }
+  closeReminderPanel()
+  showBubbleText('好哦，到点我叫你！')
+  window.petAPI.appendActivity({ petId, mood: '答应', text: '红苕答应提醒你：' + spec.text })
+}
+
+function handleReminderFire(r: { id: string; text: string }) {
+  reminderBarOn = true
+  const bar = document.getElementById('reminder-bar')!
+  document.getElementById('reminder-text')!.textContent = '⏰ ' + r.text
+  bar.classList.remove('hidden')
+  playAction('wiggle') // 提醒时扭两下，不打扰地刷存在感
+}
+
+function dismissReminder() {
+  reminderBarOn = false
+  document.getElementById('reminder-bar')!.classList.add('hidden')
+  window.petAPI.appendActivity({ petId, mood: '放心', text: '红苕确认你收到提醒了。' })
+}
+
+function openDiary() {
+  // 日记面板是独立小窗口（主进程管理），避免在宠物窗口内遮挡宠物
+  window.petAPI.openDiary(petId)
+}
+
+// 换肤：写入 pet.json（持久化）+ 本地即时生效
+function switchTheme(theme: string) {
+  window.petAPI.setTheme(petId, theme)
+  document.body.dataset.theme = theme
+  if (pet) pet.theme = theme
+  showBubbleText(THEME_LABELS[theme] ? `换好啦，${THEME_LABELS[theme]}！` : '换好啦！')
+}
+
+function setupUI() {
+  const input = document.getElementById('reminder-input') as HTMLInputElement
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      submitReminder()
+    } else if (e.key === 'Escape') {
+      closeReminderPanel()
+    }
+  })
+  document.getElementById('reminder-ok')!.addEventListener('click', submitReminder)
+  document.getElementById('reminder-cancel')!.addEventListener('click', closeReminderPanel)
+  document.getElementById('reminder-done')!.addEventListener('click', dismissReminder)
+  window.petAPI.onReminderFire((r) => handleReminderFire(r))
+  // 托盘兜底入口：提醒面板 / 换肤（右键手势不可用时）
+  window.petAPI.onOpenReminder(() => openReminderPanel())
+  window.petAPI.onThemeSet((theme) => {
+    document.body.dataset.theme = theme
+    if (pet) pet.theme = theme
+    showBubbleText(THEME_LABELS[theme] ? `换好啦，${THEME_LABELS[theme]}！` : '换好啦！')
+  })
+}
+
+// ================= 动作菜单（已迁移到主进程原生 Menu.popup，见 main.js menu:showContext） =================
+
+function actionLabel(name: string): string {
+  const map: Record<string, string> = {
+    idle: '待机', sleep: '睡觉', sniff: '嗅闻', wiggle: '撒娇', run: '奔跑',
+    knead: '踩奶', belly: '露肚躺', stretch: '伸懒腰', poop: '拉粑粑'
+  }
+  return map[name] || name
+}
+
+// ================= 随机行为 =================
+function startRandomBehavior() {
+  if (randomTimer) clearInterval(randomTimer)
+  randomTimer = setInterval(() => {
+    if (!pet) return
+    // 8/5：自动演示只在待机状态触发——用户手动切换动作后锁定，验证/观看不被随机切换打断
+    if (currentAction !== 'idle') return
+    const candidates = Object.entries(pet.actions).filter(([name, act]) => {
+      return textures[name] && name !== currentAction && (act.weight ?? 0) > 0
+    })
+    if (candidates.length === 0) return
+
+    const total = candidates.reduce((s, [, a]) => s + (a.weight ?? 0), 0)
+    let r = Math.random() * total
+    for (const [name, act] of candidates) {
+      r -= (act.weight ?? 0)
+      if (r <= 0) {
+        playAction(name)
+        // 短暂后回到 idle
+        const backTo = Object.keys(pet.actions).find(k => k === 'idle')
+        if (backTo && backTo !== name) {
+          setTimeout(() => playAction(backTo), 4000)
+        }
+        break
+      }
+    }
+  }, 12000)
+}
+
+// ================= 启动 =================
+init().catch(err => {
+  console.error('PetPet 启动失败', err)
+  const bubble = document.getElementById('bubble')!
+  bubble.textContent = '启动失败: ' + err.message
+  bubble.classList.remove('hidden')
+})
