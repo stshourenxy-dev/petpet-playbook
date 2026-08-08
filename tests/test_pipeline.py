@@ -20,8 +20,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'pipeline'))
 
 from clean_cutout import clean
+from gen_prompt import build_prompt, check_negative_words
 from make_sheet import make_sheet
 from select_frames import select_frames
+from validate_pet import validate_pet_json
 
 
 def make_frames(n, size=128, move=True):
@@ -208,16 +210,13 @@ class TestMakeSheet:
 def test_validate_pet_demo_package():
     """demo 宠物包应通过校验（v2 兼容 + 精灵表存在 + 纹理合规）"""
     import json as _json
-
-    from pipeline.validate_pet import validate_pet_json
-    with open('examples/redshao-demo/pet.json', encoding='utf-8') as f:
+    with open(os.path.join(ROOT, 'examples/redshao-demo/pet.json'), encoding='utf-8') as f:
         data = _json.load(f)
-    assert validate_pet_json(data, 'examples/redshao-demo') == 0
+    assert validate_pet_json(data, os.path.join(ROOT, 'examples/redshao-demo')) == 0
 
 
 def test_validate_pet_rejects_bad_id():
     """非法 id（空格/大写违规）应报错"""
-    from pipeline.validate_pet import validate_pet_json
     data = {'version': 3, 'id': 'Bad Pet!', 'name': 'x', 'actions': {}}
     assert validate_pet_json(data, '/tmp') > 0
 
@@ -225,21 +224,18 @@ def test_validate_pet_rejects_bad_id():
 def test_validate_pet_rejects_texture_overflow():
     """精灵表超过 16384px 纹理上限应报错（黑屏铁律）"""
     import json as _json
-
-    from pipeline.validate_pet import validate_pet_json
-    with open('examples/redshao-demo/pet.json', encoding='utf-8') as f:
+    with open(os.path.join(ROOT, 'examples/redshao-demo/pet.json'), encoding='utf-8') as f:
         data = _json.load(f)
     # 24 帧 × 1024 = 24576 > 16384（07 踩坑实录铁律 #1）
     data['actions']['idle'] = {
         'file': 'knead/knead_sheet.png',
         'frames': 24, 'frameWidth': 1024, 'frameHeight': 1024,
     }
-    assert validate_pet_json(data, 'examples/redshao-demo') > 0
+    assert validate_pet_json(data, os.path.join(ROOT, 'examples/redshao-demo')) > 0
 
 
 def test_gen_prompt_redshao_style():
     """红苕画像 → 提示词：应含品种锚点 + 比例 + 动词链，不含否定词"""
-    from pipeline.gen_prompt import build_prompt
     profile = {
         'breed': '棕白边牧', 'ratio': '1.2:0.4:1', 'legRatio': '0.6:1',
         'build': '标准', 'notes': '咖白花色', 'ageStage': '成年',
@@ -253,6 +249,5 @@ def test_gen_prompt_redshao_style():
 
 def test_gen_prompt_negative_word_detection():
     """动作描述含否定词应被检出（铁律 1）"""
-    from pipeline.gen_prompt import check_negative_words
     assert check_negative_words('不要尾巴虚化') == ['不要']
     assert check_negative_words('欢快奔跑') == []
