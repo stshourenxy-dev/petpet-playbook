@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('petAPI', {
   setIgnoreMouse: (ignore, forward) => ipcRenderer.send('pet:setIgnoreMouse', ignore, forward),
   getWindowPosition: () => ipcRenderer.invoke('view:getPos'),
   notifyPetLoaded: (petId) => ipcRenderer.send('pet:loaded', petId),
+  onPetSwitch: (cb) => ipcRenderer.on('pet:switch', (_e, id) => cb(id)),
   onAction: (cb) => ipcRenderer.on('pet:action', (_e, name) => cb(name)),
   onZoom: (cb) => ipcRenderer.on('view:zoom', (_e, factor) => cb(factor)),
   onReset: (cb) => ipcRenderer.on('view:reset', () => cb()),

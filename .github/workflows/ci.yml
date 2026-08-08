@@ -114,6 +114,6 @@ jobs:
         with:
           name: PetPet-windows
           path: |
-            viewer/dist/*.exe
-            viewer/dist/*.blockmap
+            viewer/release/*.exe
+            viewer/release/*.blockmap
           if-no-files-found: error

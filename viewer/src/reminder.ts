@@ -76,7 +76,7 @@ function contentOf(input: string, timePart: string): string {
 }
 
 const NUM_PAT = '[0-9一二两三四五六七八九十半]+'
-const MIN_PAT = '(?:\d{1,2}|半|[一二两三四五六七八九十]{1,3})'
+const MIN_PAT = '(?:\\d{1,2}|半|[一二两三四五六七八九十]{1,3})'
 
 // 分钟解析：半=30，其余走数字解析
 function minOf(s: string | undefined): number {

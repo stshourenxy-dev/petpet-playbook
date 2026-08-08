@@ -57,6 +57,7 @@ declare global {
       onThemeSet: (cb: (theme: string) => void) => void
       showContextMenu: (x: number, y: number) => Promise<void>
       listActivity: (petId: string) => Promise<{ ts: number; mood: string; text: string }[]>
+      onPetSwitch: (cb: (id: string) => void) => void
     }
   }
 }
@@ -229,7 +230,23 @@ async function init() {
     console.error('获取窗口位置失败', err)
   }
 
+  // P0-1：发现宠物，而非硬编码 redshao（listPets 终于被调用）
+  let pets: string[] = []
+  try {
+    pets = await window.petAPI.listPets()
+  } catch (err) {
+    console.error('listPets 失败', err)
+  }
+  if (pets.length === 0) {
+    showFatal('没有找到宠物包。请创建 ~/.petpet/pets/<宠物名>/pet.json（格式见 docs/08-接口协议.md）')
+    return
+  }
+  petId = pets[0]
   await loadPet(petId)
+  // 多宠：托盘菜单支持切换（主进程已构建切换子菜单）
+  window.petAPI.onPetSwitch((id) => {
+    loadPet(id).catch(err => showFatal(err.message))
+  })
   setupUI()
   startRandomBehavior()
 }
@@ -239,8 +256,9 @@ async function loadPet(id: string) {
   petId = id
   const data = await window.petAPI.loadPet(id)
   if (!data || data.error) {
-    console.error('加载宠物失败', data)
-    return
+    // P0-2：不再静默失败，抛出给顶层 catch → 可见错误卡片
+    const msg = data?.error || `宠物 ${id} 加载失败：pet.json 缺失或无法解析`
+    throw new Error(msg)
   }
   pet = data
   textures = {}
@@ -306,8 +324,8 @@ function playAction(name: string) {
   // 动作切换 → 通知主进程同步日记「当前状态」（idle 也用固定文案）
   const actT = ACTIVITY_TEXTS[name]
   window.petAPI.notifyAction(actT
-    ? { mood: actT.mood, text: actT.text }
-    : { mood: '待机', text: '红苕安安静静地待着，等你来摸～' })
+    ? { mood: actT.mood, text: actT.text.replace('{name}', petDisplayName()) }
+    : { mood: '待机', text: `${petDisplayName()}安安静静地待着，等你来摸～` })
   const act = pet.actions[name]
   const frames = textures[name]
 
@@ -395,22 +413,26 @@ function showBubbleText(text?: string) {
 }
 
 // ================= 红苕日记（方案B） =================
-// 动作 → 心情 + 红苕式文案（红苕 = 公狗，棕白皮克斯风；knead 踩奶为红苕专属动作，文案必须保留动作名）
+// 动作 → 心情 + 文案（{name} 运行时替换为宠物名，不再硬编码红苕）
 const ACTIVITY_TEXTS: Record<string, { mood: string; text: string }> = {
-  sleep:   { mood: '安逸', text: '红苕蜷成一团睡着了，呼噜声轻轻的。' },
-  sniff:   { mood: '好奇', text: '红苕凑近嗅了嗅，鼻头湿漉漉的。' },
-  wiggle:  { mood: '开心', text: '红苕扭着屁股撒欢，尾巴摇成小风扇。' },
-  run:     { mood: '兴奋', text: '红苕嗖地窜了出去，一溜烟就没影了。' },
-  knead:   { mood: '满足', text: '红苕踩奶踩得入迷，前爪一按一按的。' },
-  belly:   { mood: '惬意', text: '红苕翻出肚皮晒太阳，毫无防备。' },
-  poop:    { mood: '心虚', text: '红苕先转着圈圈踩好位置，解决完就撒欢跑开了。' },
-  stretch: { mood: '舒坦', text: '红苕伸了个大大的懒腰，爪子张得开花。' }
+  sleep:   { mood: '安逸', text: '{name}蜷成一团睡着了，呼噜声轻轻的。' },
+  sniff:   { mood: '好奇', text: '{name}凑近嗅了嗅，鼻头湿漉漉的。' },
+  wiggle:  { mood: '开心', text: '{name}扭着屁股撒欢，尾巴摇成小风扇。' },
+  run:     { mood: '兴奋', text: '{name}嗖地窜了出去，一溜烟就没影了。' },
+  knead:   { mood: '满足', text: '{name}踩奶踩得入迷，前爪一按一按的。' },
+  belly:   { mood: '惬意', text: '{name}翻出肚皮晒太阳，毫无防备。' },
+  poop:    { mood: '心虚', text: '{name}先转着圈圈踩好位置，解决完就撒欢跑开了。' },
+  stretch: { mood: '舒坦', text: '{name}伸了个大大的懒腰，爪子张得开花。' }
+}
+
+function petDisplayName(): string {
+  return pet?.name || '宠物'
 }
 
 function logActionActivity(name: string) {
   const t = ACTIVITY_TEXTS[name]
   if (!t) return
-  window.petAPI.appendActivity({ petId, mood: t.mood, text: t.text })
+  window.petAPI.appendActivity({ petId, mood: t.mood, text: t.text.replace('{name}', petDisplayName()) })
 }
 
 function fmtTime(ts: number): string {
@@ -447,7 +469,7 @@ async function submitReminder() {
   }
   closeReminderPanel()
   showBubbleText('好哦，到点我叫你！')
-  window.petAPI.appendActivity({ petId, mood: '答应', text: '红苕答应提醒你：' + spec.text })
+  window.petAPI.appendActivity({ petId, mood: '答应', text: `${petDisplayName()}答应提醒你：` + spec.text })
 }
 
 function handleReminderFire(r: { id: string; text: string }) {
@@ -461,7 +483,7 @@ function handleReminderFire(r: { id: string; text: string }) {
 function dismissReminder() {
   reminderBarOn = false
   document.getElementById('reminder-bar')!.classList.add('hidden')
-  window.petAPI.appendActivity({ petId, mood: '放心', text: '红苕确认你收到提醒了。' })
+  window.petAPI.appendActivity({ petId, mood: '放心', text: `${petDisplayName()}确认你收到提醒了。` })
 }
 
 function openDiary() {
@@ -544,9 +566,17 @@ function startRandomBehavior() {
 }
 
 // ================= 启动 =================
+// P0-2：可见的错误反馈（不透明卡片，替代透明窗口里的静默失败）
+function showFatal(msg: string) {
+  const bubble = document.getElementById('bubble')!
+  bubble.textContent = '⚠️ ' + msg
+  bubble.classList.remove('hidden')
+  bubble.style.background = 'rgba(255,255,255,0.98)'
+  bubble.style.maxWidth = '280px'
+  bubble.style.whiteSpace = 'normal'
+}
+
 init().catch(err => {
   console.error('PetPet 启动失败', err)
-  const bubble = document.getElementById('bubble')!
-  bubble.textContent = '启动失败: ' + err.message
-  bubble.classList.remove('hidden')
+  showFatal(err?.message || '启动失败')
 })

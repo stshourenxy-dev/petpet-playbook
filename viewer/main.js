@@ -9,6 +9,7 @@ let mainWindow = null
 let tray = null
 let currentPetId = null
 let currentPetActions = null
+let currentPetName = '宠物'  // P0-3：菜单文案不再硬编码红苕
 
 // 动作名 → 中文标签
 const ACTION_LABELS = {
@@ -76,6 +77,7 @@ function createTray() {
 }
 
 function rebuildTrayMenu() {
+  const petName = currentPetName || '宠物'
   const template = [
     { label: 'PetPet 桌宠', enabled: false },
     { type: 'separator' },
@@ -84,6 +86,26 @@ function rebuildTrayMenu() {
     { label: '🔎 缩小', click: () => send('view:zoom', 1 / 1.15) },
     { label: '↺ 重置大小', click: () => send('view:reset') }
   ]
+
+  // P0-1：多宠切换（列出 PETS_ROOT 下所有宠物包）
+  let pets = []
+  try {
+    pets = fs.readdirSync(PETS_ROOT, { withFileTypes: true })
+      .filter(d => d.isDirectory() && /^[a-z0-9_-]+$/i.test(d.name))
+      .map(d => d.name)
+    if (pets.length > 1) {
+      template.push({ type: 'separator' })
+      template.push({
+        label: '🐕 切换宠物',
+        submenu: pets.map(id => ({
+          label: id === currentPetId ? `${id} ✓` : id,
+          type: 'radio',
+          checked: id === currentPetId,
+          click: () => send('pet:switch', id)
+        }))
+      })
+    }
+  } catch (e) { /* PETS_ROOT 不存在时忽略 */ }
 
   // 动作子菜单（从 pet.json 加载，恢复旧版功能）
   if (currentPetActions && Object.keys(currentPetActions).length > 0) {
@@ -97,7 +119,7 @@ function rebuildTrayMenu() {
 
   // 方案B：功能入口兜底（右键手势不可用时从托盘调出）
   template.push({ type: 'separator' })
-  template.push({ label: '📖 红苕日记', click: () => openDiaryWindow(currentPetId || 'redshao') })
+  template.push({ label: `📖 ${petName}日记`, click: () => openDiaryWindow(currentPetId || pets[0] || 'redshao') })
   template.push({ label: '⏰ 提醒我', click: () => send('open:reminder') })
 
   template.push({ type: 'separator' })
@@ -108,11 +130,12 @@ function rebuildTrayMenu() {
 
 // 右键菜单：原生 macOS Menu.popup（自动毛玻璃/定位，替代 HTML 自绘）
 ipcMain.handle('menu:showContext', (_evt, x, y) => {
+  const petName = currentPetName || '宠物'
   const template = [
-    { label: '红苕', enabled: false },
+    { label: petName, enabled: false },
     { type: 'separator' },
     { label: '⏰ 提醒我', click: () => send('open:reminder') },
-    { label: '📖 红苕日记', click: () => openDiaryWindow(currentPetId || 'redshao') },
+    { label: `📖 ${petName}日记`, click: () => openDiaryWindow(currentPetId || 'redshao') },
     { type: 'separator' }
   ]
   if (currentPetActions && Object.keys(currentPetActions).length > 0) {
@@ -167,8 +190,10 @@ ipcMain.on('pet:loaded', (_evt, petId) => {
   currentPetId = petId
   try {
     const p = path.join(PETS_ROOT, petId, 'pet.json')
-    currentPetActions = JSON.parse(fs.readFileSync(p, 'utf-8')).actions
-    currentTheme = JSON.parse(fs.readFileSync(p, 'utf-8')).theme || 'bro'
+    const parsed = JSON.parse(fs.readFileSync(p, 'utf-8'))
+    currentPetActions = parsed.actions
+    currentTheme = parsed.theme || 'bro'
+    currentPetName = parsed.name || '宠物'  // P0-3：宠物名跟随 pet.json
   } catch (e) {
     currentPetActions = null
     currentTheme = 'bro'
@@ -298,7 +323,7 @@ function openDiaryWindow(petId) {
       return 'bro'
     }
   })()
-  const sendData = (win) => win.webContents.send('diary:data', { petId, theme, entries: readActivity(petId), status: currentActionInfo })
+  const sendData = (win) => win.webContents.send('diary:data', { petId, petName: currentPetName, theme, entries: readActivity(petId), status: currentActionInfo })
   if (diaryWindow && !diaryWindow.isDestroyed()) {
     diaryWindow.focus()
     sendData(diaryWindow)
@@ -357,7 +382,7 @@ function fireReminder(id) {
   if (!r) return
   console.log('[PetPet] 提醒触发 #' + id + ' → ' + r.text)
   send('reminder:fire', { id, text: r.text })
-  appendActivity(currentPetId || 'redshao', { mood: '提醒', text: '红苕提醒你：' + r.text })
+  appendActivity(currentPetId || 'redshao', { mood: '提醒', text: `${currentPetName || '宠物'}提醒你：` + r.text })
   if (r.repeat === 'daily') {
     r.at += 24 * 3600 * 1000
   } else if (r.repeat === 'weekly') {
