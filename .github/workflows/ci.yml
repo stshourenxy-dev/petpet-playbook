@@ -55,10 +55,18 @@ jobs:
       - name: 安装依赖
         run: npm ci
         working-directory: viewer
+      - name: 构建渲染层（vite build）
+        run: npm run build
+        working-directory: viewer
+      - name: 校验 dist 产物
+        run: |
+          ls -la dist/
+          test -f dist/index.html && echo "✅ index.html 存在"
+        working-directory: viewer
       - name: 打包 Windows 安装包（nsis + portable）
         shell: bash
         run: |
-          npm run dist 2>&1 | tee dist.log
+          npx electron-builder --win 2>&1 | tee dist.log
           EXIT_CODE=${PIPESTATUS[0]}
           echo "::group::electron-builder 日志尾部"
           tail -60 dist.log
