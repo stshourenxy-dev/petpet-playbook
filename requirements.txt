@@ -4,5 +4,5 @@
 # ⚠️ rembg 依赖 onnxruntime，Python 3.13+ 可能装不上——请用 3.9-3.12
 numpy>=1.24,<3.0
 Pillow>=10.0,<12.0
-rembg>=2.0,<3.0
+rembg>=2.0.77,<3.0
 scipy>=1.11,<2.0
