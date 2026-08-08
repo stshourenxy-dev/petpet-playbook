@@ -100,6 +100,9 @@ async function init() {
   app.canvas.style.width = '100%'
   app.canvas.style.height = '100%'
   app.canvas.style.display = 'block'
+  // P2-3: 可访问性——canvas 角色标注（屏幕阅读器能读出这是桌宠）
+  app.canvas.setAttribute('role', 'img')
+  app.canvas.setAttribute('aria-label', pet?.name ? `${pet.name}（桌面宠物）` : '桌面宠物')
 
   // 拖拽移动窗口
   let dragging = false
@@ -263,6 +266,10 @@ async function loadPet(id: string) {
   }
   pet = data
   textures = {}
+  // P2-3: 宠物加载后更新 canvas 的 aria-label（init 时 pet 还未加载）
+  if (app.canvas) {
+    app.canvas.setAttribute('aria-label', `${pet.name}（桌面宠物）`)
+  }
   // 主题皮肤：bro=弟弟(蓝绿) / sis=妹妹(暖粉)，跟随 pet.json 的 theme 字段
   document.body.dataset.theme = pet.theme || 'bro'
   // 通知主进程当前宠物（托盘动作菜单用）
@@ -388,10 +395,16 @@ async function applyScale() {
 }
 
 function applyZoom(factor: number) {
+  const prev = baseScale
   const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, baseScale * factor))
   baseScale = next
   try { localStorage.setItem('petpet:scale', String(next)) } catch { /* ignore */ }  // P2-8
-  applyScale()
+  // P2-9: 到边界给反馈（静默钳制让人困惑：继续滚什么都没发生）
+  if (next === prev) {
+    showBubbleText(next >= ZOOM_MAX ? '已经是最大啦 🐾' : '已经最小啦 🐾')
+  } else {
+    applyScale()
+  }
 }
 
 function resetZoom() {
