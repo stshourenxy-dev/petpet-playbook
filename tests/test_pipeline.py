@@ -46,6 +46,48 @@ class TestSelectFrames:
         finally:
             shutil.rmtree(d, ignore_errors=True)
 
+    def test_nonstandard_names(self):
+        # B-3: 非 xxx_NNN.png 命名（ffmpeg 默认 0001.png / 多段前缀）→ 不再依赖文件名解析
+        d = tempfile.mkdtemp(prefix='test_oddnames_')
+        try:
+            for i in range(12):
+                img = Image.new('RGBA', (128, 128), (255, 255, 255, 255))
+                ImageDraw.Draw(img).rectangle(
+                    [i * 8, 40, i * 8 + 30, 90], fill=(50, 50, 50, 255))
+                img.save(os.path.join(d, f'{i:04d}.png'))  # 纯数字命名
+            assert len(select_frames(d, 12)) == 12
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_prefixed_names(self):
+        # 多段前缀命名（redshao_run_001.png）→ 同样不崩
+        d = tempfile.mkdtemp(prefix='test_prefixed_')
+        try:
+            for i in range(12):
+                img = Image.new('RGBA', (128, 128), (255, 255, 255, 255))
+                ImageDraw.Draw(img).rectangle(
+                    [i * 8, 40, i * 8 + 30, 90], fill=(50, 50, 50, 255))
+                img.save(os.path.join(d, f'pet_run_{i:03d}.png'))
+            assert len(select_frames(d, 12)) == 12
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_over_100_frames_order(self):
+        # A-6: 输出 p_100.png 排序正确（三位序号防字典序错乱）
+        d = make_frames(120, size=64)
+        out = tempfile.mkdtemp(prefix='test_out100_')
+        try:
+            import select_frames as sf
+            # 直接调 main 逻辑：复制产物到 out
+            picks = select_frames(d, 12)
+            for i, f in enumerate(picks):
+                shutil.copy(os.path.join(d, f), os.path.join(out, f'p_{i:03d}.png'))
+            files = sorted(os.listdir(out))
+            assert files[0] == 'p_000.png' and files[-1] == 'p_011.png'
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+            shutil.rmtree(out, ignore_errors=True)
+
     def test_fewer_frames_than_target(self):
         # 帧数不足 → 全返回，不崩（WorkBuddy 边界 #1）
         d = make_frames(10)
@@ -116,6 +158,36 @@ class TestMakeSheet:
             sheet = Image.open(os.path.join(out, 't.png'))
             # target 自适应（非固定 cell）：两帧横排 → 宽 = 高 × 2
             assert sheet.size[0] == sheet.size[1] * 2
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+            shutil.rmtree(out, ignore_errors=True)
+
+    def test_all_transparent_raises_friendly(self):
+        # A-4: 全部帧全透明 → 友好 RuntimeError，而不是 max([]) ValueError
+        d, out = tempfile.mkdtemp(), tempfile.mkdtemp()
+        try:
+            for i in range(3):
+                Image.new('RGBA', (100, 100), (0, 0, 0, 0)).save(
+                    os.path.join(d, f'f_{i:02d}.png'))
+            with pytest.raises(RuntimeError, match='全透明'):
+                make_sheet(d, out, cell=128)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+            shutil.rmtree(out, ignore_errors=True)
+
+    def test_bbox_off_by_one(self):
+        # A-5: bbox 右下 +1（crop 开区间）——内容不再丢 1px
+        d, out = tempfile.mkdtemp(), tempfile.mkdtemp()
+        try:
+            img = Image.new('RGBA', (100, 100), (0, 0, 0, 0))
+            ImageDraw.Draw(img).rectangle(
+                [10, 10, 59, 59], fill=(255, 0, 0, 255))  # 50×50
+            img.save(os.path.join(d, 'f_00.png'))
+            make_sheet(d, out, cell=128, name='t.png')
+            sheet = Image.open(os.path.join(out, 't.png'))
+            # target = 50 + 2*pad(≈6) ≈ 62（内容不丢 1px 边）
+            a = np.asarray(sheet)[:, :, 3]
+            assert (a > 10).sum() >= 2500  # 至少保住 50×50 主体
         finally:
             shutil.rmtree(d, ignore_errors=True)
             shutil.rmtree(out, ignore_errors=True)

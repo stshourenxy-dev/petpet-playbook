@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 node_modules/
 dist/
+release/
+.venv/
+.pytest_cache/
+.idea/

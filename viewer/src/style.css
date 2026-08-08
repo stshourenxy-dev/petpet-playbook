@@ -2,6 +2,12 @@
    毛玻璃（vibrancy 质感）+ SF 字体 + 柔和圆角 + 浅色/深色自适应
    强调色跟随 macOS 系统蓝（浅色 #007AFF / 深色 #0A84FF） */
 
+/* R-1: 全局 border-box——修复浮层 max-width: calc(100% - 16px) 在 content-box 下
+   把 padding/border 加在外面导致溢出（第一轮 P1-6 修复实际未生效的根因） */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 :root {
   --accent: #007AFF;
   --accent-hover: #0066D6;

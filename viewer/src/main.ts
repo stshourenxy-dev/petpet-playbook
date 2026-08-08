@@ -163,9 +163,7 @@ async function init() {
       window.petAPI.setIgnoreMouse(shouldIgnore, true)
     }
   }
-  app.canvas.addEventListener('pointermove', updateMouseIgnore)
-  // P0-4: 穿透状态机绑到 document（capture）——鼠标移到面板/提醒条上时事件不冒泡到 canvas，
-  // 此前面板区域永远保持穿透、点不到；改绑 document 后任何位置移动都会触发状态更新
+  // R-3: document capture 监听已覆盖 canvas 上所有移动，删掉 canvas 冗余绑定（避免每次移动走两遍 uiRects 回流）
   document.addEventListener('pointermove', updateMouseIgnore, true)
   // 初始穿透
   setTimeout(() => window.petAPI.setIgnoreMouse(true, true), 300)
