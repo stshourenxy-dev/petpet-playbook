@@ -19,10 +19,11 @@
     "concurrently": "^9.1.0",
     "cross-env": "^7.0.3",
     "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
     "typescript": "^5.7.2",
     "vite": "^6.0.7",
-    "wait-on": "^8.0.1",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wait-on": "^8.0.1"
   },
   "productName": "PetPet",
   "build": {
@@ -31,39 +32,9 @@
     "files": [
       "main.js",
       "preload.cjs",
-      "panel-preload.cjs",
-      "panel.html",
-      "panel.js",
-      "panel.css",
       "package.json",
       "dist/**/*",
       "index.html"
-    ],
-    "directories": {
-      "buildResources": "assets"
-    },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": ["x64"]
-        },
-        {
-          "target": "portable",
-          "arch": ["x64"]
-        }
-      ],
-      "icon": "assets/icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "shortcutName": "PetPet"
-    },
-    "mac": {
-      "icon": "assets/icon_apple_dog.png",
-      "category": "public.app-category.entertainment"
-    }
+    ]
   }
 }
