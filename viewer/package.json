@@ -38,10 +38,12 @@
       "panel.css",
       "package.json",
       "dist/**/*",
-      "index.html"
+      "index.html",
+      "!node_modules/**/*"
     ],
     "directories": {
-      "buildResources": "assets"
+      "buildResources": "assets",
+      "output": "release"
     },
     "win": {
       "target": [
