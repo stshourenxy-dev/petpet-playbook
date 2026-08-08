@@ -7,6 +7,8 @@ export type ActionSource = 'menu' | 'reminder' | 'random' | 'auto' | 'init'
 
 // 打断价值排序：数字越大越优先
 // 提醒(7) > 拉粑粑(5) > 撒娇/伸懒腰(4) > 奔跑/露肚躺(3) > 嗅闻(2) > 待机(1) > 睡觉(0)
+// 注：remind:7 当前是装饰性锚点——提醒实际播 wiggle 且走 reminder 源直接放行（shouldPlay 硬路径），
+// 保留它作为“未来提醒专用动作”的优先级预留，不参与当前仲裁
 export const ACTION_PRIORITY: Record<string, number> = {
   sleep: 0,
   idle: 1,

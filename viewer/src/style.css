@@ -7,7 +7,10 @@
   --accent-hover: #0066D6;
   --separator: rgba(60, 60, 67, 0.18);
   --text-primary: rgba(0, 0, 0, 0.85);
-  --text-secondary: rgba(60, 60, 67, 0.55);
+  --text-secondary: rgba(60, 60, 67, 0.78);  /* P2-1: 0.55→0.78，对比度 3.02:1 → 5.0:1（WCAG AA） */
+  --border: rgba(0, 0, 0, 0.12);  /* P2-2: 边框变量化，深色模式有对应值 */
+  --btn-bg: rgba(255, 255, 255, 0.65);  /* P2-2: 按钮底变量化 */
+  --focus-ring: rgba(0, 122, 255, 0.28);  /* P2-2: 焦点环变量化 */
   --menu-bg: rgba(246, 246, 246, 0.78);
   --bubble-bg: rgba(255, 255, 255, 0.78);
   --bar-bg: rgba(246, 246, 246, 0.75);
@@ -22,7 +25,10 @@
     --accent-hover: #409CFF;
     --separator: rgba(84, 84, 88, 0.55);
     --text-primary: rgba(255, 255, 255, 0.92);
-    --text-secondary: rgba(235, 235, 245, 0.5);
+    --text-secondary: rgba(235, 235, 245, 0.75);  /* P2-1: 深色模式对比度 3.83:1 → 5.5:1 */
+    --border: rgba(255, 255, 255, 0.18);  /* P2-2: 深色模式边框变亮 */
+    --btn-bg: rgba(72, 72, 74, 0.85);  /* P2-2: 深色模式按钮底 */
+    --focus-ring: rgba(10, 132, 255, 0.45);
     --menu-bg: rgba(46, 46, 48, 0.78);
     --bubble-bg: rgba(56, 56, 58, 0.8);
     --bar-bg: rgba(46, 46, 48, 0.78);
@@ -104,12 +110,18 @@ html, body {
   background: var(--menu-bg);
   -webkit-backdrop-filter: blur(30px) saturate(1.8);
   backdrop-filter: blur(30px) saturate(1.8);
-  border: 0.5px solid rgba(0, 0, 0, 0.12);
+  border: 0.5px solid var(--border);
   border-radius: 10px;
   box-shadow: var(--shadow);
   z-index: 100;
   padding: 5px;
   animation: menuIn 0.14s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* P2-5: 动效敏感用户关闭动画 */
+@media (prefers-reduced-motion: reduce) {
+  .pet-menu { animation: none; }
+  #bubble { transition: none; }
 }
 
 @keyframes menuIn {
@@ -159,7 +171,7 @@ html, body {
   background: var(--bar-bg);
   -webkit-backdrop-filter: blur(30px) saturate(1.8);
   backdrop-filter: blur(30px) saturate(1.8);
-  border: 0.5px solid rgba(0, 0, 0, 0.12);
+  border: 0.5px solid var(--border);
   border-radius: 12px;
   box-shadow: var(--shadow);
   z-index: 200;
@@ -190,7 +202,7 @@ html, body {
   width: 100%;
   box-sizing: border-box;
   padding: 7px 11px;
-  border: 0.5px solid rgba(0, 0, 0, 0.12);
+  border: 0.5px solid var(--border);
   border-radius: 8px;
   font-size: 13px;
   font-family: inherit;
@@ -202,12 +214,12 @@ html, body {
 
 #reminder-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.22);
+  box-shadow: 0 0 0 3px var(--focus-ring);  /* P2-2: 焦点环跟随变量 */
 }
 
 .panel-hint {
   margin-top: 8px;
-  font-size: 11px;
+  font-size: 12px;  /* P2-1: 11px→12px，说明书最小字号 */
   color: var(--text-secondary);
   line-height: 1.5;
 }
@@ -221,14 +233,19 @@ html, body {
 
 .btn {
   padding: 4px 14px;
-  border: 0.5px solid rgba(0, 0, 0, 0.1);
+  border: 0.5px solid var(--border);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--btn-bg);  /* P2-2: 深色模式不再浅灰底 */
   color: var(--text-primary);
   font-size: 12.5px;
   font-family: inherit;
   cursor: pointer;
   transition: filter 0.1s, background 0.1s;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .btn:hover {
@@ -260,7 +277,7 @@ html, body {
   background: var(--bar-bg);
   -webkit-backdrop-filter: blur(30px) saturate(1.8);
   backdrop-filter: blur(30px) saturate(1.8);
-  border: 0.5px solid rgba(0, 0, 0, 0.12);
+  border: 0.5px solid var(--border);
   border-radius: 11px;
   padding: 9px 14px;
   color: var(--text-primary);
