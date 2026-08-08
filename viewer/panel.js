@@ -38,7 +38,7 @@ window.panelAPI.onDiaryData(({ entries, theme, status, petName }) => {
   if (!entries.length) {
     const empty = document.createElement('div')
     empty.className = 'empty'
-    empty.textContent = `还没有日记，去戳戳${name}吧～`
+    empty.textContent = `还没有日记。从托盘切换一个动作，或设个提醒试试～`  // P2-6: 引导到真实有效动作（点击宠物不写日记）
     listEl.appendChild(empty)
     return
   }
