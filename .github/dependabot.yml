@@ -1,0 +1,32 @@
+# Dependabot 自动依赖更新
+# 策略：只盯直接依赖的安全更新；Python 传递依赖（rembg→onnxruntime 链）噪音大，忽略。
+# 大版本升级（major）不开 PR（需人工评估破坏性），只开 minor/patch 与安全更新。
+
+version: 2
+updates:
+  # Python 素材管线
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    ignore:
+      # rembg 的传递依赖链（onnxruntime 等）更新频繁且与项目无关，全部忽略
+      - dependency-name: "onnxruntime"
+      - dependency-name: "onnxruntime-silicon"
+      - dependency-name: "opencv-python-headless"
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # Electron 客户端（viewer/）
+  - package-ecosystem: "npm"
+    directory: "/viewer"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    ignore:
+      # Electron 大版本升级需人工验证打包/窗口行为，不开自动 PR
+      - dependency-name: "electron"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

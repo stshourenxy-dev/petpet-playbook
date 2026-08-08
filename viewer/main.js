@@ -33,7 +33,7 @@ function saveUiState(patch) {
   try {
     const state = { ...loadUiState(), ...patch }
     fs.mkdirSync(path.dirname(UI_STATE_FILE), { recursive: true })
-    fs.writeFileSync(UI_STATE_FILE, JSON.stringify(state))
+    fs.writeFileSync(UI_STATE_FILE, JSON.stringify(state), { mode: 0o600 })
   } catch (e) {
     console.error('[PetPet] UI 状态保存失败', e)
   }
@@ -324,7 +324,7 @@ function saveReminders() {
     fs.mkdirSync(path.dirname(REMINDERS_FILE), { recursive: true })
     const obj = {}
     for (const [id, r] of reminders) obj[id] = r
-    fs.writeFileSync(REMINDERS_FILE, JSON.stringify({ reminders: obj }, null, 2))
+    fs.writeFileSync(REMINDERS_FILE, JSON.stringify({ reminders: obj }, null, 2), { mode: 0o600 })
   } catch (e) {
     console.error('[PetPet] 提醒存档失败:', e)
   }
@@ -351,7 +351,7 @@ function appendActivity(petId, entry) {
     if (!Array.isArray(list)) list = []
     list.push({ ts: Date.now(), ...entry })
     if (list.length > 100) list = list.slice(-100)
-    fs.writeFileSync(p, JSON.stringify(list, null, 2))
+    fs.writeFileSync(p, JSON.stringify(list, null, 2), { mode: 0o600 })
   } catch (e) {
     console.error('[PetPet] 写活动记录失败:', e)
   }
