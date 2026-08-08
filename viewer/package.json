@@ -71,6 +71,7 @@
     "mac": {
       "icon": "icon_apple_dog.png",
       "category": "public.app-category.entertainment"
-    }
+    },
+    "publish": null
   }
 }
