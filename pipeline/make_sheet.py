@@ -12,6 +12,7 @@
 """
 import argparse
 import os
+import sys
 
 import numpy as np
 from PIL import Image
@@ -22,7 +23,8 @@ def alpha_bbox(img):
     ys, xs = np.where(a > 10)
     if len(xs) == 0:
         return None
-    return xs.min(), ys.min(), xs.max(), ys.max()
+    # A-5: 右下角 +1（crop 右下是开区间，bbox 是闭区间）
+    return xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
 
 
 def make_sheet(input_dir, out_dir, cell=1024, pad_ratio=0.06, name=None):
@@ -37,11 +39,19 @@ def make_sheet(input_dir, out_dir, cell=1024, pad_ratio=0.06, name=None):
     boxes = [alpha_bbox(img) for img in imgs]
 
     # 2. 统一目标尺寸：取所有 bbox 的最大宽高（含边距），上限 cell
-    ws = [b[2] - b[0] for b in boxes if b]
-    hs = [b[3] - b[1] for b in boxes if b]
+    valid_boxes = [b for b in boxes if b]
+    if not valid_boxes:
+        # A-4: 全部帧全透明——友好报错而不是 max([]) 裸崩
+        raise RuntimeError(
+            f'所有 {len(frames)} 帧都是全透明（未检测到不透明内容）——请检查抠图结果，'
+            f'常见原因：rembg 模型下载失败 / 输入不是 RGBA / 抠图全部失败')
+    ws = [b[2] - b[0] for b in valid_boxes]
+    hs = [b[3] - b[1] for b in valid_boxes]
     max_w, max_h = max(ws), max(hs)
     pad = int(max(max_w, max_h) * pad_ratio)
     target = min(max(max_w, max_h) + pad * 2, cell)
+    # A-3: 全局 scale——所有帧共用同一缩放系数（避免每帧各自缩放导致动画"胀缩呼吸"）
+    gscale = min(1.0, (target - pad * 2) / max(max_w, max_h))
 
     frames_out = []
     for i, (img, box) in enumerate(zip(imgs, boxes)):
@@ -53,10 +63,9 @@ def make_sheet(input_dir, out_dir, cell=1024, pad_ratio=0.06, name=None):
             continue
         x0, y0, x1, y1 = box
         crop = img.crop((x0, y0, x1, y1))
-        # 等比缩放到 target-pad*2
-        scale = (target - pad * 2) / max(crop.size)
-        if scale < 1:
-            crop = crop.resize((int(crop.width * scale), int(crop.height * scale)), Image.LANCZOS)
+        # A-3: 用全局 gscale（所有帧一致），不再逐帧各自缩放
+        if gscale < 1:
+            crop = crop.resize((max(1, int(crop.width * gscale)), max(1, int(crop.height * gscale))), Image.LANCZOS)
         canvas = Image.new('RGBA', (target, target), (0, 0, 0, 0))
         canvas.paste(crop, ((target - crop.width) // 2, (target - crop.height) // 2), crop)
         frames_out.append(canvas)
@@ -73,7 +82,14 @@ def make_sheet(input_dir, out_dir, cell=1024, pad_ratio=0.06, name=None):
     for i, f in enumerate(frames_out):
         sheet.paste(f, (i * target, 0), f)
     out_path = os.path.join(out_dir, name or f'{os.path.basename(os.path.normpath(input_dir))}_sheet.png')
+    if os.path.exists(out_path):
+        # A-8: 不静默覆盖同名文件
+        print(f'⚠️  输出文件已存在（不覆盖）: {out_path}——请改名或移走旧文件', file=sys.stderr)
+        raise SystemExit(1)
     sheet.save(out_path)
+    # A-8: 关闭文件句柄（长抽帧批次下防句柄泄漏）
+    for img in imgs:
+        img.close()
     print(f'精灵表: {sheet.size}, {len(frames_out)} 帧, cell={target}x{target}')
     print(f'输出: {out_path}')
     return target

@@ -12,6 +12,7 @@
 """
 import argparse
 import os
+import sys
 
 import numpy as np
 from PIL import Image
@@ -46,6 +47,13 @@ def main():
     parser.add_argument('--output', required=True, help='清理输出目录')
     parser.add_argument('--min-size', type=int, default=500, help='噪点面积阈值（默认 500px）')
     args = parser.parse_args()
+
+    if not os.path.isdir(args.input):
+        print(f'错误: 输入目录不存在: {args.input}', file=sys.stderr)
+        sys.exit(1)
+    if args.min_size <= 0:
+        print(f'错误: --min-size 必须为正整数，收到 {args.min_size}', file=sys.stderr)
+        sys.exit(1)
 
     os.makedirs(args.output, exist_ok=True)
     frames = sorted(f for f in os.listdir(args.input) if f.endswith('.png'))

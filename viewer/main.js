@@ -58,7 +58,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,  // D-4: 加固（preload 仅用 contextBridge/ipcRenderer，sandbox 下兼容）
       backgroundThrottling: false // 动画不节流（借鉴 bitnp）
     }
   })
@@ -221,7 +221,10 @@ ipcMain.handle('pet:list', () => {
 // 读取 pet.json
 ipcMain.handle('pet:load', (_evt, petId) => {
   try {
-    const p = path.join(PETS_ROOT, petId, 'pet.json')
+    // D-1: 与其它 handler 一致，先做 safePetId 校验（pet:load 此前是唯一漏网的）
+    const safe = safePetId(petId)
+    if (!safe) return { error: 'invalid pet id' }
+    const p = path.join(PETS_ROOT, safe, 'pet.json')
     return JSON.parse(fs.readFileSync(p, 'utf-8'))
   } catch (e) {
     return { error: String(e) }
@@ -256,8 +259,12 @@ const MIME = {
 
 ipcMain.handle('pet:file', (_evt, petId, relPath) => {
   try {
-    const full = path.join(PETS_ROOT, petId, relPath)
-    if (!full.startsWith(PETS_ROOT)) return { error: 'invalid path' }
+    const safe = safePetId(petId)
+    if (!safe) return { error: 'invalid pet id' }
+    const full = path.join(PETS_ROOT, safe, relPath)
+    // D-2: 用 path.relative 做路径边界检查（startsWith 前缀匹配可被 pets-evil/ 绕过）
+    const rel = path.relative(PETS_ROOT, full)
+    if (rel.startsWith('..') || path.isAbsolute(rel)) return { error: 'invalid path' }
     const buf = fs.readFileSync(full)
     const ext = path.extname(full).toLowerCase()
     const mime = MIME[ext] || 'application/octet-stream'
@@ -428,7 +435,7 @@ function openDiaryWindow(petId) {
       preload: path.join(__dirname, 'panel-preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: true  // D-4: 加固（panel-preload 仅用 contextBridge/ipcRenderer）
     }
   })
   diaryWindow.setAlwaysOnTop(true, 'screen-saver')
