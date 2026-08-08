@@ -32,9 +32,43 @@
     "files": [
       "main.js",
       "preload.cjs",
+      "panel-preload.cjs",
+      "panel.html",
+      "panel.js",
+      "panel.css",
       "package.json",
       "dist/**/*",
       "index.html"
-    ]
+    ],
+    "directories": {
+      "buildResources": "assets"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "PetPet"
+    },
+    "mac": {
+      "icon": "icon_apple_dog.png",
+      "category": "public.app-category.entertainment"
+    }
   }
 }
