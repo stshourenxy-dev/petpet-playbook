@@ -18,14 +18,36 @@ const ACTION_LABELS = {
 }
 
 // ---------- 窗口 ----------
+// P2-8: 窗口位置/缩放持久化到 ~/.petpet/ui-state.json
+const UI_STATE_FILE = path.join(PETS_ROOT, '..', 'ui-state.json')
+
+function loadUiState() {
+  try {
+    return JSON.parse(fs.readFileSync(UI_STATE_FILE, 'utf8')) || {}
+  } catch {
+    return {}
+  }
+}
+
+function saveUiState(patch) {
+  try {
+    const state = { ...loadUiState(), ...patch }
+    fs.mkdirSync(path.dirname(UI_STATE_FILE), { recursive: true })
+    fs.writeFileSync(UI_STATE_FILE, JSON.stringify(state))
+  } catch (e) {
+    console.error('[PetPet] UI 状态保存失败', e)
+  }
+}
+
 function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  const saved = loadUiState()
 
   mainWindow = new BrowserWindow({
     width: 320,
     height: 320,
-    x: Math.round(width - 380),
-    y: Math.round(height - 420),
+    x: saved.x ?? Math.round(width - 380),
+    y: saved.y ?? Math.round(height - 420),
     transparent: true,
     frame: false,
     alwaysOnTop: true,
@@ -43,6 +65,13 @@ function createWindow() {
 
   mainWindow.setAlwaysOnTop(true, 'screen-saver')
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+
+  // 窗口移动/关闭时保存位置
+  mainWindow.on('moved', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      saveUiState({ x: mainWindow.getPosition()[0], y: mainWindow.getPosition()[1] })
+    }
+  })
 
   const devUrl = process.env.VITE_DEV_SERVER_URL
   if (devUrl) {

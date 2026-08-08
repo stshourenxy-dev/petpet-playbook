@@ -69,6 +69,11 @@ let sprite: PIXI.AnimatedSprite | null = null
 let textures: Record<string, PIXI.Texture[]> = {}
 let currentAction = 'idle'
 let baseScale = 0.9
+// P2-8: 缩放持久化（localStorage，渲染层可用）
+try {
+  const savedScale = parseFloat(localStorage.getItem('petpet:scale') || '')
+  if (savedScale >= 0.5 && savedScale <= 2) baseScale = savedScale
+} catch { /* ignore */ }
 let pingpongDir = 1
 let bubbleTimer: ReturnType<typeof setTimeout> | null = null
 let randomTimer: ReturnType<typeof setInterval> | null = null
@@ -385,11 +390,13 @@ async function applyScale() {
 function applyZoom(factor: number) {
   const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, baseScale * factor))
   baseScale = next
+  try { localStorage.setItem('petpet:scale', String(next)) } catch { /* ignore */ }  // P2-8
   applyScale()
 }
 
 function resetZoom() {
   baseScale = 0.9
+  try { localStorage.setItem('petpet:scale', '0.9') } catch { /* ignore */ }  // P2-8
   applyScale()
 }
 
@@ -431,11 +438,6 @@ function logActionActivity(name: string) {
   window.petAPI.appendActivity({ petId, mood: t.mood, text: t.text.replace('{name}', petDisplayName()) })
 }
 
-function fmtTime(ts: number): string {
-  const d = new Date(ts)
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
-}
 
 // ================= 提醒系统（方案B） =================
 function openReminderPanel() {
@@ -516,16 +518,6 @@ function setupUI() {
   window.petAPI.onOpenReminder(() => openReminderPanel())
 }
 
-// ================= 动作菜单（已迁移到主进程原生 Menu.popup，见 main.js menu:showContext） =================
-
-function actionLabel(name: string): string {
-  const map: Record<string, string> = {
-    idle: '待机', sleep: '睡觉', sniff: '嗅闻', wiggle: '撒娇', run: '奔跑',
-    knead: '踩奶', belly: '露肚躺', stretch: '伸懒腰', poop: '拉粑粑'
-  }
-  return map[name] || name
-}
-
 // ================= 随机行为 =================
 // P0：随机触发经 requestAction('random') 仲裁——只在待机时触发（守卫已在 shouldPlay），
 // 且回 idle 带守卫：仅当“当前仍是本次随机动作”时才回（修复：用户/提醒打断后不再被强制拉回 idle）
@@ -534,7 +526,8 @@ function startRandomBehavior() {
   randomTimer = setInterval(() => {
     if (!pet) return
     // 8/5：自动演示只在待机状态触发——用户手动切换动作后锁定，验证/观看不被随机切换打断
-    if (currentAction !== 'idle') return
+    // P3-4: 提醒横幅显示期间也暂停随机行为（提醒是用户关注的焦点，宠物别抢戏）
+    if (currentAction !== 'idle' || reminderBarOn) return
     const candidates = Object.entries(pet.actions).filter(([name, act]) => {
       return textures[name] && name !== currentAction && (act.weight ?? 0) > 0
     })
