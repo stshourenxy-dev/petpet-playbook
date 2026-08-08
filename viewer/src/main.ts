@@ -53,6 +53,7 @@ declare global {
       appendActivity: (entry: { petId: string; mood: string; text: string }) => void
       openDiary: (petId: string) => void
       onOpenReminder: (cb: () => void) => void
+      onVisibility: (cb: (visible: boolean) => void) => void  // P2-5: 隐藏时暂停动画
       showContextMenu: (x: number, y: number) => Promise<void>
       listActivity: (petId: string) => Promise<{ ts: number; mood: string; text: string }[]>
       onPetSwitch: (cb: (id: string) => void) => void
@@ -529,6 +530,14 @@ function setupUI() {
   window.petAPI.onReminderFire((r) => handleReminderFire(r))
   // 托盘兜底入口：提醒面板（右键手势不可用时）
   window.petAPI.onOpenReminder(() => openReminderPanel())
+  // P2-5: 窗口隐藏时暂停动画（省电）——恢复时继续
+  window.petAPI.onVisibility((visible) => {
+    if (visible) {
+      app.ticker.start()
+    } else {
+      app.ticker.stop()
+    }
+  })
 }
 
 // ================= 随机行为 =================

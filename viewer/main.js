@@ -180,8 +180,13 @@ ipcMain.handle('menu:showContext', (_evt, x, y) => {
 
 function toggleWindow() {
   if (!mainWindow) return
-  if (mainWindow.isVisible()) mainWindow.hide()
-  else mainWindow.show()
+  if (mainWindow.isVisible()) {
+    mainWindow.hide()
+    send('pet:visibility', false)  // P2-5: 隐藏时暂停动画（省电，否则 backgroundThrottling:false 下持续渲染）
+  } else {
+    mainWindow.show()
+    send('pet:visibility', true)
+  }
 }
 
 function send(channel, payload) {
@@ -396,9 +401,15 @@ function openDiaryWindow(petId) {
   }
   const pos = mainWindow ? mainWindow.getPosition() : [100, 100]
   const size = mainWindow ? mainWindow.getSize() : [320, 320]
-  const work = screen.getPrimaryDisplay().workAreaSize
+  // P1-8: 用宠物所在显示器（多显示器时日记不该开在主屏）
+  const display = mainWindow ? screen.getDisplayNearestPoint({ x: pos[0], y: pos[1] }) : screen.getPrimaryDisplay()
+  const work = display.workArea
   let x = pos[0] + size[0] + 8
-  if (x + 300 > work.width) x = Math.max(0, pos[0] - 300 - 8) // 右侧无空间则放左侧
+  let y = Math.max(work.y, pos[1])
+  if (x + 300 > work.x + work.width) x = Math.max(work.x, pos[0] - 300 - 8) // 右侧无空间则放左侧
+  // P1-8: 垂直方向边界钳制（宠物在屏幕下半部时，日记窗口下沿不超出工作区）
+  const WIN_H = 400
+  if (y + WIN_H > work.y + work.height) y = Math.max(work.y, work.y + work.height - WIN_H)
   diaryWindow = new BrowserWindow({
     width: 300,
     height: 400,

@@ -5,7 +5,7 @@
   --accent: #007AFF;
   --separator: rgba(60, 60, 67, 0.16);
   --text-primary: rgba(0, 0, 0, 0.85);
-  --text-secondary: rgba(60, 60, 67, 0.55);
+  --text-secondary: rgba(60, 60, 67, 0.78);  /* P2-1: 对比度达 WCAG AA */
   --panel-bg: rgba(246, 246, 246, 0.82);
   --card-bg: rgba(255, 255, 255, 0.7);
   --pill-bg: rgba(0, 122, 255, 0.12);
@@ -19,7 +19,7 @@
     --accent: #0A84FF;
     --separator: rgba(84, 84, 88, 0.5);
     --text-primary: rgba(255, 255, 255, 0.92);
-    --text-secondary: rgba(235, 235, 245, 0.5);
+    --text-secondary: rgba(235, 235, 245, 0.75);  /* P2-1: 深色模式对比度 */
     --panel-bg: rgba(46, 46, 48, 0.82);
     --card-bg: rgba(60, 60, 62, 0.7);
     --pill-bg: rgba(10, 132, 255, 0.22);

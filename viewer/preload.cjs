@@ -23,4 +23,5 @@ contextBridge.exposeInMainWorld('petAPI', {
   notifyAction: (info) => ipcRenderer.send('pet:action:notify', info),
   openDiary: (petId) => ipcRenderer.send('diary:open', petId),
   onOpenReminder: (cb) => ipcRenderer.on('open:reminder', () => cb()),
+  onVisibility: (cb) => ipcRenderer.on('pet:visibility', (_e, visible) => cb(visible)),  // P2-5: 隐藏时暂停动画
 })
