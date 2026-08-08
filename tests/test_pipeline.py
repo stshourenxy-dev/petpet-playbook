@@ -201,3 +201,56 @@ class TestMakeSheet:
         finally:
             shutil.rmtree(d, ignore_errors=True)
             shutil.rmtree(out, ignore_errors=True)
+
+
+# ============ 数据链路 v3：validate_pet + gen_prompt ============
+
+def test_validate_pet_demo_package():
+    """demo 宠物包应通过校验（v2 兼容 + 精灵表存在 + 纹理合规）"""
+    from pipeline.validate_pet import validate_pet_json
+    import json as _json
+    with open('examples/redshao-demo/pet.json', encoding='utf-8') as f:
+        data = _json.load(f)
+    assert validate_pet_json(data, 'examples/redshao-demo') == 0
+
+
+def test_validate_pet_rejects_bad_id():
+    """非法 id（空格/大写违规）应报错"""
+    from pipeline.validate_pet import validate_pet_json
+    data = {'version': 3, 'id': 'Bad Pet!', 'name': 'x', 'actions': {}}
+    assert validate_pet_json(data, '/tmp') > 0
+
+
+def test_validate_pet_rejects_texture_overflow():
+    """精灵表超过 16384px 纹理上限应报错（黑屏铁律）"""
+    from pipeline.validate_pet import validate_pet_json
+    import json as _json
+    with open('examples/redshao-demo/pet.json', encoding='utf-8') as f:
+        data = _json.load(f)
+    # 24 帧 × 1024 = 24576 > 16384（07 踩坑实录铁律 #1）
+    data['actions']['idle'] = {
+        'file': 'knead/knead_sheet.png',
+        'frames': 24, 'frameWidth': 1024, 'frameHeight': 1024,
+    }
+    assert validate_pet_json(data, 'examples/redshao-demo') > 0
+
+
+def test_gen_prompt_redshao_style():
+    """红苕画像 → 提示词：应含品种锚点 + 比例 + 动词链，不含否定词"""
+    from pipeline.gen_prompt import build_prompt
+    profile = {
+        'breed': '棕白边牧', 'ratio': '1.2:0.4:1', 'legRatio': '0.6:1',
+        'build': '标准', 'notes': '咖白花色', 'ageStage': '成年',
+    }
+    p = build_prompt(profile, 'stretch', None, '皮克斯3D卡通风格')
+    assert '棕白边牧' in p
+    assert '1.2:1' in p and '0.6:1' in p
+    assert '→' in p  # 动词链
+    assert '不要' not in p
+
+
+def test_gen_prompt_negative_word_detection():
+    """动作描述含否定词应被检出（铁律 1）"""
+    from pipeline.gen_prompt import check_negative_words
+    assert check_negative_words('不要尾巴虚化') == ['不要']
+    assert check_negative_words('欢快奔跑') == []
