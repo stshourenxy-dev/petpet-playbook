@@ -4,7 +4,7 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage } = require
 const path = require('path')
 const fs = require('fs')
 
-const PETS_ROOT = path.join(process.env.HOME, '.petpet', 'pets')
+const PETS_ROOT = path.join(app.getPath('home'), '.petpet', 'pets')
 let mainWindow = null
 let tray = null
 let currentPetId = null

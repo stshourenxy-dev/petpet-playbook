@@ -41,3 +41,30 @@ jobs:
       - name: 校验构建产物
         run: test -f dist/index.html && echo "✅ dist/index.html 存在" && ls dist/assets/ | head -5
         working-directory: viewer
+
+  viewer-win-package:
+    name: Windows 安装包构建
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: viewer/package-lock.json
+      - name: 安装依赖
+        run: npm ci
+        working-directory: viewer
+      - name: 打包 Windows 安装包（nsis + portable）
+        run: npm run dist
+        working-directory: viewer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 上传安装包产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: PetPet-windows
+          path: |
+            viewer/dist/*.exe
+            viewer/dist/*.blockmap
+          if-no-files-found: error
