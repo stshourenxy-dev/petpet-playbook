@@ -80,14 +80,35 @@ jobs:
         working-directory: viewer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: 上传构建日志（失败排查用）
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: 失败时发布构建日志到 issue（供排查）
+        if: failure()
+        uses: actions/github-script@v7
         with:
-          name: dist-log
-          path: viewer/dist.log
-          if-no-files-found: ignore
-          retention-days: 1
+          script: |
+            const fs = require('fs');
+            const log = fs.existsSync('viewer/dist.log') ? fs.readFileSync('viewer/dist.log', 'utf8').slice(-4000) : '（无日志文件）';
+            const body = '## Windows 打包失败日志（自动上报）\n```\n' + log + '\n```';
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+            let issue = issues.find(i => i.title === 'CI Windows 打包失败日志');
+            if (issue) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: 'CI Windows 打包失败日志',
+                body
+              });
+            }
       - name: 上传安装包产物
         uses: actions/upload-artifact@v4
         with:
