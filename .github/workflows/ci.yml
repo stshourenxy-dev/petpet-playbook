@@ -61,12 +61,20 @@ jobs:
           npm run dist 2>&1 | tee /tmp/dist.log
           EXIT_CODE=${PIPESTATUS[0]}
           echo "::group::electron-builder 日志尾部"
-          tail -40 /tmp/dist.log
+          tail -60 /tmp/dist.log
           echo "::endgroup::"
           exit $EXIT_CODE
         working-directory: viewer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 上传构建日志（失败排查用）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-log
+          path: viewer/dist.log
+          if-no-files-found: ignore
+          retention-days: 1
       - name: 上传安装包产物
         uses: actions/upload-artifact@v4
         with:
