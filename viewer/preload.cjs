@@ -22,7 +22,5 @@ contextBridge.exposeInMainWorld('petAPI', {
   showContextMenu: (x, y) => ipcRenderer.invoke('menu:showContext', x, y),
   notifyAction: (info) => ipcRenderer.send('pet:action:notify', info),
   openDiary: (petId) => ipcRenderer.send('diary:open', petId),
-  setTheme: (petId, theme) => ipcRenderer.send('pet:theme', petId, theme),
   onOpenReminder: (cb) => ipcRenderer.on('open:reminder', () => cb()),
-  onThemeSet: (cb) => ipcRenderer.on('theme:set', (_e, theme) => cb(theme))
 })

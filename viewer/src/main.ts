@@ -52,9 +52,7 @@ declare global {
       onReminderFire: (cb: (r: { id: string; text: string }) => void) => void
       appendActivity: (entry: { petId: string; mood: string; text: string }) => void
       openDiary: (petId: string) => void
-      setTheme: (petId: string, theme: string) => void
       onOpenReminder: (cb: () => void) => void
-      onThemeSet: (cb: (theme: string) => void) => void
       showContextMenu: (x: number, y: number) => Promise<void>
       listActivity: (petId: string) => Promise<{ ts: number; mood: string; text: string }[]>
       onPetSwitch: (cb: (id: string) => void) => void
@@ -84,11 +82,6 @@ let curWinY = 0
 const WINDOW_W = 320
 const WINDOW_H = 320
 const BUBBLE_TEXTS = ['汪！', '摸摸我～', '今天也要开心哦！', '饿了…有吃的吗？', '(*^▽^*)']
-
-// 主题皮肤（pet.json theme 字段）：bro=弟弟(蓝绿) / sis=妹妹(暖粉) / orange=暖橙经典
-const THEME_LABELS: Record<string, string> = {
-  bro: '弟弟款', sis: '妹妹款', orange: '暖橙经典'
-}
 
 // ================= 初始化 =================
 async function init() {
@@ -162,6 +155,9 @@ async function init() {
     }
   }
   app.canvas.addEventListener('pointermove', updateMouseIgnore)
+  // P0-4: 穿透状态机绑到 document（capture）——鼠标移到面板/提醒条上时事件不冒泡到 canvas，
+  // 此前面板区域永远保持穿透、点不到；改绑 document 后任何位置移动都会触发状态更新
+  document.addEventListener('pointermove', updateMouseIgnore, true)
   // 初始穿透
   setTimeout(() => window.petAPI.setIgnoreMouse(true, true), 300)
 
@@ -298,7 +294,7 @@ async function loadPet(id: string) {
   )
 
   const firstAction = Object.keys(pet.actions)[0] || 'idle'
-  playAction(firstAction) // 初始加载：直接播放（不经仲裁，init 语义）
+  playAction(firstAction, 'init') // 初始加载：直接播放（不经仲裁，init 语义）
   updateTitle()
 }
 
@@ -314,13 +310,13 @@ function updateTitle() {
 function requestAction(name: string, source: 'menu' | 'reminder' | 'random' | 'init' = 'menu') {
   if (!pet || !textures[name] || textures[name].length === 0) return
   if (!shouldPlay({ name, source }, currentAction)) return
-  playAction(name)
+  playAction(name, source)
 }
 
-function playAction(name: string) {
+function playAction(name: string, source: 'menu' | 'reminder' | 'random' | 'init' = 'menu') {
   if (!pet || !textures[name] || textures[name].length === 0) return
-  // 方案B：切换到非 idle 动作时记入红苕日记（同动作重复切换不重复记）
-  if (name !== 'idle' && name !== currentAction) logActionActivity(name)
+  // P1-7: 随机行为不写日记（12s 一条会把 100 条日记 20 分钟冲光）——只有用户主动/提醒才记录
+  if (source !== 'random' && name !== 'idle' && name !== currentAction) logActionActivity(name)
   // 动作切换 → 通知主进程同步日记「当前状态」（idle 也用固定文案）
   const actT = ACTIVITY_TEXTS[name]
   window.petAPI.notifyAction(actT
@@ -468,14 +464,23 @@ async function submitReminder() {
     return
   }
   closeReminderPanel()
-  showBubbleText('好哦，到点我叫你！')
-  window.petAPI.appendActivity({ petId, mood: '答应', text: `${petDisplayName()}答应提醒你：` + spec.text })
+  // P1-2: 回执回显解析结果——"每天 10:30 叫你「吃药」"，用户当场核对，解析 bug 不再隐藏
+  const d = new Date(spec.at)
+  const p = (n: number) => String(n).padStart(2, '0')
+  const when = `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`
+  const repeatLabel = spec.repeat === 'daily' ? '（每天）' : spec.repeat === 'weekly' ? '（每周）' : ''
+  showBubbleText(`好哦，${when}叫你「${spec.text}」${repeatLabel}`)
+  window.petAPI.appendActivity({ petId, mood: '答应', text: `${petDisplayName()}答应提醒你：${when} ${spec.text}${repeatLabel}` })
 }
 
 function handleReminderFire(r: { id: string; text: string }) {
   reminderBarOn = true
   const bar = document.getElementById('reminder-bar')!
-  document.getElementById('reminder-text')!.textContent = '⏰ ' + r.text
+  // P1-4: 多条提醒同时到点不覆盖——已显示的提醒条追加新条目（换行），而非替换
+  const existing = document.getElementById('reminder-text')!.textContent
+  document.getElementById('reminder-text')!.textContent = existing && existing !== '⏰ '
+    ? existing + '\n⏰ ' + r.text
+    : '⏰ ' + r.text
   bar.classList.remove('hidden')
   requestAction('wiggle', 'reminder') // 提醒时扭两下，不打扰地刷存在感（reminder 源优先，可打断当前动作）
 }
@@ -491,13 +496,7 @@ function openDiary() {
   window.petAPI.openDiary(petId)
 }
 
-// 换肤：写入 pet.json（持久化）+ 本地即时生效
-function switchTheme(theme: string) {
-  window.petAPI.setTheme(petId, theme)
-  document.body.dataset.theme = theme
-  if (pet) pet.theme = theme
-  showBubbleText(THEME_LABELS[theme] ? `换好啦，${THEME_LABELS[theme]}！` : '换好啦！')
-}
+// P1-5: 删除幽灵换肤（switchTheme 无调用者、无 CSS 消费 data-theme）
 
 function setupUI() {
   const input = document.getElementById('reminder-input') as HTMLInputElement
@@ -513,13 +512,8 @@ function setupUI() {
   document.getElementById('reminder-cancel')!.addEventListener('click', closeReminderPanel)
   document.getElementById('reminder-done')!.addEventListener('click', dismissReminder)
   window.petAPI.onReminderFire((r) => handleReminderFire(r))
-  // 托盘兜底入口：提醒面板 / 换肤（右键手势不可用时）
+  // 托盘兜底入口：提醒面板（右键手势不可用时）
   window.petAPI.onOpenReminder(() => openReminderPanel())
-  window.petAPI.onThemeSet((theme) => {
-    document.body.dataset.theme = theme
-    if (pet) pet.theme = theme
-    showBubbleText(THEME_LABELS[theme] ? `换好啦，${THEME_LABELS[theme]}！` : '换好啦！')
-  })
 }
 
 // ================= 动作菜单（已迁移到主进程原生 Menu.popup，见 main.js menu:showContext） =================
