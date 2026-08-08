@@ -21,7 +21,9 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
       - name: 安装依赖（验证 requirements.txt 本身有效）
-        run: pip install -r requirements.txt pytest
+        run: pip install -r requirements.txt pytest ruff
+      - name: lint（ruff）
+        run: ruff check pipeline/ tests/
       - name: 冒烟测试
         run: python tests/smoke_test.py
       - name: 单元测试（边界情况）

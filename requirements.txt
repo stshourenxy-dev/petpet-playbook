@@ -1,6 +1,8 @@
-# PetPet Playbook 素材管线依赖（Python 3.9+）
+# PetPet Playbook 素材管线依赖（Python 3.9 - 3.12 已验证区间）
 # 安装：pip install -r requirements.txt
-numpy>=1.24
-Pillow>=10.0
-rembg>=2.0
-scipy>=1.10
+# 版本策略：>= 下界 + < 上界（防 numpy 2.x / Pillow 12 等大版本 API 移除）
+# ⚠️ rembg 依赖 onnxruntime，Python 3.13+ 可能装不上——请用 3.9-3.12
+numpy>=1.24,<3.0
+Pillow>=10.0,<12.0
+rembg>=2.0,<3.0
+scipy>=1.11,<2.0

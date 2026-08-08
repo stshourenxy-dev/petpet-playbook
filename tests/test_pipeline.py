@@ -77,8 +77,6 @@ class TestSelectFrames:
         d = make_frames(120, size=64)
         out = tempfile.mkdtemp(prefix='test_out100_')
         try:
-            import select_frames as sf
-            # 直接调 main 逻辑：复制产物到 out
             picks = select_frames(d, 12)
             for i, f in enumerate(picks):
                 shutil.copy(os.path.join(d, f), os.path.join(out, f'p_{i:03d}.png'))

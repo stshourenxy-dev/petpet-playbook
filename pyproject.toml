@@ -1,0 +1,8 @@
+# ruff 配置：零配置起步，随仓库演进收紧
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+# 忽略：shebang 但非可执行（脚本被 import 调用，非直接执行）
+[tool.ruff.lint]
+ignore = ["EXE001"]

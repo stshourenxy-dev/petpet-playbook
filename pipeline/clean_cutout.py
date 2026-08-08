@@ -28,7 +28,7 @@ def clean(img, min_size=500):
     lab, n = ndimage.label(mask)
     if n <= 1:
         return img
-    sizes = ndimage.sum(mask, lab, range(1, n + 1))
+    sizes = ndimage.sum_labels(mask, lab, index=range(1, n + 1))  # E-2: 新版 API（scipy 1.17+；sum 已被官方建议替换）
     # sizes[i] 对应 label i+1；只删小于阈值的
     drop = set(np.where(sizes < min_size)[0] + 1)
     if not drop:
