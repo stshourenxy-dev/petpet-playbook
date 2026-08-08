@@ -68,7 +68,16 @@ npm run build        # 构建渲染层（dist/）
 npm start            # 构建后直接启动
 ```
 
-宠物包结构见 08-接口协议；想用示例宠物，把 examples/redshao/ 整理成宠物包即可。
+宠物包结构见 08-接口协议。**想立刻看到效果**：`examples/redshao-demo/` 是一个可直接运行的**最小示例宠物包**（抱熊待机 + 睡觉两个动作，压缩至 512px，~4.4MB）——复制到用户数据目录即可：
+
+```bash
+# macOS
+mkdir -p ~/.petpet/pets && cp -r examples/redshao-demo ~/.petpet/pets/redshao-demo
+# Windows
+# 复制 examples/redshao-demo 到 C:\Users\<用户名>\.petpet\pets\redshao-demo
+```
+
+启动后即可看到红苕在桌面上抱熊待机、睡觉。完整 8 动作（嗅闻/撒娇/奔跑/露肚/拉粑粑/伸懒腰）需按管线自生成——见 02 与 05。
 
 ---
 
@@ -113,7 +122,7 @@ petpet-playbook/
 ├── pipeline/            可运行脚本（抽帧选帧/抠图/清理/拼表）
 ├── viewer/              客户端参考实现（Electron + PixiJS 源码）
 ├── tests/               管线冒烟测试
-└── examples/           实例素材（红苕：边牧完整闭环；包包：金毛×德牧混血第二样本）
+└── examples/           实例素材（redshao-demo：可运行最小宠物包；redshao：边牧完整闭环；baobao：金毛×德牧混血第二样本）
 ```
 
 ---
@@ -139,6 +148,17 @@ docs/
 ---
 
 ## 实例素材（examples/）
+
+**红苕 demo 包**（`examples/redshao-demo/`）——**可直接运行的完整宠物包**（最小版）：
+
+| 内容 | 说明 |
+|------|------|
+| pet.json | 宠物包定义（idle 抱熊 + sleep 两动作，512px 压缩版） |
+| knead/knead_sheet.png | 抱熊待机精灵表（12 帧，~2.9MB） |
+| sleep/sleep_sprite.png | 睡觉精灵表（12 帧，~1.5MB） |
+
+> 复制到 `~/.petpet/pets/redshao-demo/` 即可运行（用法见上方「想立刻看到效果」）。
+> 这是为了让你**先看到效果再决定要不要投入**——完整 8 动作需按管线自生成。
 
 **红苕**（棕白边牧，`examples/redshao/`）——完整 8 动作闭环的样本：
 
