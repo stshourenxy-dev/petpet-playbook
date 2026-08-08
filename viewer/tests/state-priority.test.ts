@@ -41,6 +41,20 @@ describe('state-priority 仲裁层', () => {
     expect(shouldPlay({ name: 'run', source: 'random' }, 'wiggle')).toBe(false)
   })
 
+  // ---- P0-1 回归：随机动作播完回 idle 必须放行 ----
+  // WorkBuddy 审查发现：回 idle 此前走 random 源，被 'currentAction === idle'
+  // 守卫拒绝（此时 currentAction 是刚播的随机动作）→ 宠物永久停在随机动作、
+  // 随机行为永久停摆。修复 = 回 idle 改走 init 源（有 currentAction === name
+  // 前置守卫防误打断）。本用例锁死该集成链路：
+  it('P0-1 回归：随机播 run 后回 idle 被放行（init 源）', () => {
+    // 随机播 run（idle 时允许）
+    expect(shouldPlay({ name: 'run', source: 'random' }, 'idle')).toBe(true)
+    // 4s 后回 idle：当前正在播 run → 走 init 源必须放行（旧代码走 random 源会返回 false）
+    expect(shouldPlay({ name: 'idle', source: 'init' }, 'run')).toBe(true)
+    // 反向保险：此时再发一个新的随机动作请求必须被拒（仍在播放中）
+    expect(shouldPlay({ name: 'sniff', source: 'random' }, 'run')).toBe(false)
+  })
+
   // ---- auto：低优先级不打断高优先级 ----
   it('auto 源：低优先级不打断高优先级', () => {
     expect(shouldPlay({ name: 'idle', source: 'auto' }, 'sniff')).toBe(false)

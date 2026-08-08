@@ -563,7 +563,10 @@ function startRandomBehavior() {
         const backTo = Object.keys(pet.actions).find(k => k === 'idle')
         if (backTo && backTo !== name) {
           setTimeout(() => {
-            if (currentAction === name) requestAction(backTo, 'random')
+            // 修复（WorkBuddy 审查 P0-1）：回 idle 必须走 init 源——
+            // random 源的守卫要求 currentAction === 'idle'，与这里的
+            // currentAction === name 互斥，会导致随机动作播一次后永久停摆
+            if (currentAction === name) requestAction(backTo, 'init')
           }, 4000)
         }
         break
