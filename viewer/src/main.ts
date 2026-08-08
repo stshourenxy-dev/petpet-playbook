@@ -4,6 +4,7 @@
 import 'pixi.js/unsafe-eval'
 import * as PIXI from 'pixi.js'
 import { parseReminder } from './reminder'
+import { shouldPlay, isOneshot } from './state-priority'
 
 // ================= 类型 =================
 interface PetActionSpec {
@@ -16,6 +17,7 @@ interface PetActionSpec {
   pingpong?: boolean
   frameWidth?: number
   frameHeight?: number
+  scale?: number
   transitions?: Record<string, number>
 }
 
@@ -26,6 +28,7 @@ interface PetJson {
   theme?: string
   cellWidth: number
   cellHeight: number
+  error?: string
   actions: Record<string, PetActionSpec>
 }
 
@@ -43,6 +46,7 @@ declare global {
       onReset: (cb: () => void) => void
       onTestAction: (cb: (name: string) => void) => void
       notifyPetLoaded: (id: string) => void
+      notifyAction: (info: { mood: string; text: string }) => void
       onAction: (cb: (name: string) => void) => void
       setReminder: (spec: { at: number; repeat: string; text: string }) => Promise<{ id?: string; error?: string }>
       onReminderFire: (cb: (r: { id: string; text: string }) => void) => void
@@ -211,10 +215,10 @@ async function init() {
   window.petAPI.onReset(() => resetZoom())
 
   // 测试：切换动作
-  window.petAPI.onTestAction((name) => playAction(name))
+  window.petAPI.onTestAction((name) => requestAction(name, 'menu'))
 
   // 托盘菜单切换动作（7/31 恢复旧版功能）
-  window.petAPI.onAction((name) => playAction(name))
+  window.petAPI.onAction((name) => requestAction(name, 'menu'))
 
   // 记录初始窗口位置（缩放中心计算基准）
   try {
@@ -276,7 +280,7 @@ async function loadPet(id: string) {
   )
 
   const firstAction = Object.keys(pet.actions)[0] || 'idle'
-  playAction(firstAction)
+  playAction(firstAction) // 初始加载：直接播放（不经仲裁，init 语义）
   updateTitle()
 }
 
@@ -285,6 +289,16 @@ function updateTitle() {
 }
 
 // ================= 动作播放 =================
+// 动作请求仲裁：所有触发源统一走这里（P0 状态仲裁层）
+// - menu/init：用户主动/初始加载 → 直接执行
+// - reminder：提醒必须显示 → 直接执行
+// - random：随机行为 → 仅在待机时允许（不再打断任何动作）
+function requestAction(name: string, source: 'menu' | 'reminder' | 'random' | 'init' = 'menu') {
+  if (!pet || !textures[name] || textures[name].length === 0) return
+  if (!shouldPlay({ name, source }, currentAction)) return
+  playAction(name)
+}
+
 function playAction(name: string) {
   if (!pet || !textures[name] || textures[name].length === 0) return
   // 方案B：切换到非 idle 动作时记入红苕日记（同动作重复切换不重复记）
@@ -330,10 +344,12 @@ const ZOOM_MAX = 2
 async function applyScale() {
   if (!sprite) return
   // 8/5 v2：窗口尺寸只随缩放（baseScale）变化，与动作无关 → 切换动作零跳变（修复"切换时窗口闪烁/动作消失"感）
-  const fw = sprite.textures[0]?.width || pet?.cellWidth || 250
-  const fh = sprite.textures[0]?.height || pet?.cellHeight || 250
+  // 帧尺寸优先取当前动作帧的真实纹理尺寸（Pixi v8 的 FrameObject 无 width/height，需类型收窄）
+  const firstTex = sprite.textures[0]
+  const fw = (firstTex && 'width' in firstTex ? (firstTex as PIXI.Texture).width : undefined) || pet?.cellWidth || 250
+  const fh = (firstTex && 'height' in firstTex ? (firstTex as PIXI.Texture).height : undefined) || pet?.cellHeight || 250
   const fit = Math.min(WINDOW_W / fw, WINDOW_H / fh)  // 固定 320 基准，不随窗口变化
-  const act = pet?.actions?.[currentAction] || {}
+  const act: PetActionSpec = pet?.actions?.[currentAction] || { frames: 0 }
   const actScale = act.scale || 1
 
   // 窗口 = 初始尺寸 × baseScale（与动作无关）
@@ -439,7 +455,7 @@ function handleReminderFire(r: { id: string; text: string }) {
   const bar = document.getElementById('reminder-bar')!
   document.getElementById('reminder-text')!.textContent = '⏰ ' + r.text
   bar.classList.remove('hidden')
-  playAction('wiggle') // 提醒时扭两下，不打扰地刷存在感
+  requestAction('wiggle', 'reminder') // 提醒时扭两下，不打扰地刷存在感（reminder 源优先，可打断当前动作）
 }
 
 function dismissReminder() {
@@ -495,6 +511,8 @@ function actionLabel(name: string): string {
 }
 
 // ================= 随机行为 =================
+// P0：随机触发经 requestAction('random') 仲裁——只在待机时触发（守卫已在 shouldPlay），
+// 且回 idle 带守卫：仅当“当前仍是本次随机动作”时才回（修复：用户/提醒打断后不再被强制拉回 idle）
 function startRandomBehavior() {
   if (randomTimer) clearInterval(randomTimer)
   randomTimer = setInterval(() => {
@@ -511,11 +529,13 @@ function startRandomBehavior() {
     for (const [name, act] of candidates) {
       r -= (act.weight ?? 0)
       if (r <= 0) {
-        playAction(name)
-        // 短暂后回到 idle
+        requestAction(name, 'random')
+        // 短暂后回到 idle（带守卫：仅当未被更高优先级动作打断时）
         const backTo = Object.keys(pet.actions).find(k => k === 'idle')
         if (backTo && backTo !== name) {
-          setTimeout(() => playAction(backTo), 4000)
+          setTimeout(() => {
+            if (currentAction === name) requestAction(backTo, 'random')
+          }, 4000)
         }
         break
       }

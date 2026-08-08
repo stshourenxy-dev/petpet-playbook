@@ -9,7 +9,8 @@
     "dev": "concurrently -k \"vite\" \"wait-on tcp:127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
     "build": "vite build",
     "start": "npm run build && electron .",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "test": "vitest run"
   },
   "dependencies": {
     "pixi.js": "^8.6.6"
@@ -20,7 +21,8 @@
     "electron": "^33.4.11",
     "typescript": "^5.7.2",
     "vite": "^6.0.7",
-    "wait-on": "^8.0.1"
+    "wait-on": "^8.0.1",
+    "vitest": "^4.1.10"
   },
   "productName": "PetPet",
   "build": {
