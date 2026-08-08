@@ -118,11 +118,16 @@ graph LR
 ```
 petpet-playbook/
 ├── README.md            本文档（全景图 + 导航）
-├── docs/                方法论文档（00-09，共 10 篇）
-├── pipeline/            可运行脚本（抽帧选帧/抠图/清理/拼表）
+├── docs/                方法论文档（00-10 共 11 篇 + 审查清单）
+├── pipeline/            可运行脚本（选帧/抠图/清理/拼表，含 ruff 配置）
 ├── viewer/              客户端参考实现（Electron + PixiJS 源码）
-├── tests/               管线冒烟测试
-└── examples/           实例素材（redshao-demo：可运行最小宠物包；redshao：边牧完整闭环；baobao：金毛×德牧混血第二样本）
+├── tests/               管线测试（冒烟 + pytest 单元测试）
+├── examples/           实例素材（redshao-demo：可运行最小宠物包；redshao：边牧完整闭环；baobao：金毛×德牧混血第二样本）
+├── requirements.txt     Python 依赖（含版本上下界）
+├── pyproject.toml       ruff 配置
+├── LICENSE              MIT（代码）+ 素材版权声明
+├── SECURITY.md          漏洞报告渠道与安全边界
+└── CONTRIBUTING.md      贡献指南（接入审查清单）
 ```
 
 ---
