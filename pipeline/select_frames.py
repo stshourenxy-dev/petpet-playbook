@@ -19,23 +19,23 @@ import numpy as np
 from PIL import Image
 
 
-def frame_diff(a, b):
+def frame_diff(a: Image.Image, b: Image.Image) -> float:
     """两帧差异度（0~1），缩略图比较"""
     ta = np.asarray(a.resize((96, 96), Image.BILINEAR), dtype=np.float32)
     tb = np.asarray(b.resize((96, 96), Image.BILINEAR), dtype=np.float32)
     return float(np.mean(np.abs(ta - tb)) / 255.0)
 
 
-def select_frames(frames_dir, target_n, min_diff=0.02):
+def select_frames(frames_dir: str, target_n: int, min_diff: float = 0.02) -> list[str]:
     """从帧目录选 target_n 帧，返回帧文件列表（有序）"""
     frames = sorted(f for f in os.listdir(frames_dir) if f.endswith('.png'))
     if len(frames) <= target_n:
         return frames
-    imgs = {f: Image.open(os.path.join(frames_dir, f)) for f in frames}
+    imgs: dict[str, Image.Image] = {f: Image.open(os.path.join(frames_dir, f)) for f in frames}
     names = frames
 
     # 1. 时间分区：target_n 个区间，每区间取与区间起点差异最大的帧
-    picks = []
+    picks: list[str] = []
     n = len(names)
     for i in range(target_n):
         start = i * n // target_n
@@ -51,7 +51,7 @@ def select_frames(frames_dir, target_n, min_diff=0.02):
         picks.append(best_f)
 
     # 2. 相邻去重：差异 < min_diff 的相邻对，剔除后者（保前者）
-    out = [picks[0]]
+    out: list[str] = [picks[0]]
     for p in picks[1:]:
         if frame_diff(imgs[out[-1]], imgs[p]) >= min_diff:
             out.append(p)
@@ -69,7 +69,7 @@ def select_frames(frames_dir, target_n, min_diff=0.02):
     return out[:target_n]
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description='从抽帧中选择 N 个真姿势帧')
     parser.add_argument('--input', required=True, help='抽帧目录（PNG）')
     parser.add_argument('--output', required=True, help='选中帧输出目录')
