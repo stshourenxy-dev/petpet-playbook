@@ -59,9 +59,10 @@ jobs:
         run: npm run build
         working-directory: viewer
       - name: 校验 dist 产物
+        shell: pwsh
         run: |
-          ls -la dist/
-          test -f dist/index.html && echo "✅ index.html 存在"
+          Get-ChildItem dist
+          if (Test-Path dist/index.html) { Write-Host "✅ index.html 存在" } else { Write-Host "❌ index.html 缺失"; exit 1 }
         working-directory: viewer
       - name: 打包 Windows 安装包（nsis + portable）
         shell: bash
