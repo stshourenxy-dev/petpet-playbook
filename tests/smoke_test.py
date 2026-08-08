@@ -37,6 +37,7 @@ def run(script, *args, expect_rc=0):
     r = subprocess.run(
         [sys.executable, os.path.join(PIPE, script), *args],
         capture_output=True, text=True,
+        check=False,  # 预期失败场景需要检查返回码而非异常
     )
     assert r.returncode == expect_rc, (
         f'{script} 退出码 {r.returncode} (期望 {expect_rc}): {r.stderr}')

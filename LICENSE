@@ -19,3 +19,31 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+## 分层授权声明（E-4）
+
+本仓库内容按三类分别授权：
+
+### 1. 代码（pipeline/、viewer/、tests/）
+
+MIT License（见上文）。可自由使用、修改、分发。
+
+### 2. 文档（docs/、README.md）
+
+知识共享 CC BY 4.0（署名即可使用，可商用）。
+
+### 3. 示例素材（examples/、assets/）
+
+**仅作示例参考，不授权再分发。** 包括：
+
+- 真实宠物照片（红苕、包包）——拍摄者与主人保留全部权利
+- AI 生成形象（皮克斯风设定图、精灵表演示动图）——由即梦 AI 生成，
+  生成方权利按平台用户协议归属，作者保留本仓库内副本的使用声明权
+
+若想基于示例素材做二次创作或分发，请先获得宠物主人的授权。
+
+> ⚠️ AI 素材合规提示：本仓库动画素材由即梦 AI 生成，发布时保留平台标识。
+> 用本 Playbook 制作你自己的桌宠时，请阅读所用 AI 平台（即梦/可灵等）的
+> 用户协议中关于生成内容权利的条款——不同平台对商用/分发的允许度不同。
