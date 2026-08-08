@@ -318,13 +318,13 @@ function updateTitle() {
 // - menu/init：用户主动/初始加载 → 直接执行
 // - reminder：提醒必须显示 → 直接执行
 // - random：随机行为 → 仅在待机时允许（不再打断任何动作）
-function requestAction(name: string, source: 'menu' | 'reminder' | 'random' | 'init' = 'menu') {
+function requestAction(name: string, source: 'menu' | 'reminder' | 'random' | 'init' | 'transition' = 'menu') {
   if (!pet || !textures[name] || textures[name].length === 0) return
   if (!shouldPlay({ name, source }, currentAction)) return
   playAction(name, source)
 }
 
-function playAction(name: string, source: 'menu' | 'reminder' | 'random' | 'init' = 'menu') {
+function playAction(name: string, source: 'menu' | 'reminder' | 'random' | 'init' | 'transition' = 'menu') {
   if (!pet || !textures[name] || textures[name].length === 0) return
   // P1-7: 随机行为不写日记（12s 一条会把 100 条日记 20 分钟冲光）——只有用户主动/提醒才记录
   if (source !== 'random' && name !== 'idle' && name !== currentAction) logActionActivity(name)
@@ -559,13 +559,30 @@ function startRandomBehavior() {
       r -= (act.weight ?? 0)
       if (r <= 0) {
         requestAction(name, 'random')
-        // 短暂后回到 idle（带守卫：仅当未被更高优先级动作打断时）
+        // 播完后按转移链（transitions）或回 idle——带守卫：仅当未被更高优先级动作打断时
+        // P0-1 修复延续：回 idle 走 init 源（random 源守卫要求 currentAction==='idle'，会与
+        // currentAction===name 互斥导致随机行为永久停摆）；有 transitions 则链式转移（transition 源）
         const backTo = Object.keys(pet.actions).find(k => k === 'idle')
         if (backTo && backTo !== name) {
           setTimeout(() => {
-            // 修复（WorkBuddy 审查 P0-1）：回 idle 必须走 init 源——
-            // random 源的守卫要求 currentAction === 'idle'，与这里的
-            // currentAction === name 互斥，会导致随机动作播一次后永久停摆
+            if (currentAction !== name || !pet) return
+            const act = pet.actions[name]
+            const trans = act?.transitions
+            if (trans && Object.keys(trans).length > 0) {
+              // 转移链：按权重选下一个动作（Shimeji NextBehaviorList 思路，docs/11 §2.1）
+              const pool = Object.entries(trans).filter(([n, w]) => textures[n] && n !== name && w > 0)
+              if (pool.length > 0) {
+                const total = pool.reduce((s, [, w]) => s + w, 0)
+                let r = Math.random() * total
+                for (const [n, w] of pool) {
+                  r -= w
+                  if (r <= 0) {
+                    requestAction(n, 'transition')
+                    return
+                  }
+                }
+              }
+            }
             if (currentAction === name) requestAction(backTo, 'init')
           }, 4000)
         }

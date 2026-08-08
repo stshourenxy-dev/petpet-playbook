@@ -73,3 +73,17 @@ describe('state-priority 仲裁层', () => {
     expect(isOneshot('stretch')).toBe(false)
   })
 })
+
+describe('transition 源（docs/11 §2.1 行为转移链）', () => {
+  it('transition 源应被允许（作者显式定义的因果链，非打断）', () => {
+    expect(shouldPlay({ name: 'stretch', source: 'transition' }, 'sleep')).toBe(true)
+  })
+  it('transition 从 sleep → stretch 权重链选择', () => {
+    const trans = { stretch: 80, idle: 20 }
+    const pool = Object.entries(trans).filter(([, w]) => w > 0)
+    const total = pool.reduce((s, [, w]) => s + w, 0)
+    expect(total).toBe(100)
+    const stretchW = pool.find(([n]) => n === 'stretch')![1]
+    expect(stretchW).toBe(80) // 睡醒先伸懒腰的倾向 > 直接回 idle
+  })
+})

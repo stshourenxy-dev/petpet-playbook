@@ -1,8 +1,10 @@
 {
-  "version": 2,
+  "version": 3,
   "id": "redshao-demo",
   "name": "红苕",
   "style": "illustration",
+  "theme": "bro",
+  "bubbles": ["汪！", "摸摸我～", "今天也要开心哦！"],
   "cellWidth": 512,
   "cellHeight": 288,
   "actions": {
@@ -14,7 +16,9 @@
       "weight": 100,
       "frameWidth": 512,
       "frameHeight": 288,
-      "scale": 1
+      "scale": 1,
+      "label": "待机",
+      "diary": { "mood": "安逸", "text": "{name}抱着小熊待机，安静等主人。" }
     },
     "sleep": {
       "frames": 12,
@@ -24,8 +28,23 @@
       "fps": 5,
       "loop": true,
       "weight": 10,
-      "scale": 1.1
+      "scale": 1.1,
+      "label": "睡觉",
+      "diary": { "mood": "安逸", "text": "{name}蜷成一团睡着了，呼噜声轻轻的。" },
+      "transitions": { "stretch": 80, "idle": 20 }
+    },
+    "stretch": {
+      "frames": 12,
+      "sprite": "stretch/stretch_sprite.png",
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 5,
+      "loop": true,
+      "weight": 10,
+      "scale": 1.0,
+      "label": "伸懒腰",
+      "diary": { "mood": "舒坦", "text": "{name}伸了个大大的懒腰，爪子张得开花。" },
+      "transitions": { "idle": 100 }
     }
-  },
-  "theme": "bro"
+  }
 }
