@@ -120,7 +120,7 @@ function rebuildTrayMenu() {
   // 方案B：功能入口兜底（右键手势不可用时从托盘调出）
   template.push({ type: 'separator' })
   template.push({ label: `📖 ${petName}日记`, click: () => openDiaryWindow(currentPetId || pets[0] || 'redshao') })
-  template.push({ label: '⏰ 提醒我', click: () => send('open:reminder') })
+  template.push({ label: '⏰ 提醒我', click: () => openReminderWithFocus() })
 
   template.push({ type: 'separator' })
   template.push({ label: '🚪 退出', click: () => app.quit() })
@@ -134,7 +134,7 @@ ipcMain.handle('menu:showContext', (_evt, x, y) => {
   const template = [
     { label: petName, enabled: false },
     { type: 'separator' },
-    { label: '⏰ 提醒我', click: () => send('open:reminder') },
+    { label: '⏰ 提醒我', click: () => openReminderWithFocus() },
     { label: `📖 ${petName}日记`, click: () => openDiaryWindow(currentPetId || 'redshao') },
     { type: 'separator' }
   ]
@@ -159,6 +159,15 @@ function send(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, payload)
   }
+}
+
+// P0-4: 从托盘/菜单打开提醒面板前，先解除窗口穿透 + 抢焦点（否则面板点不动、键盘输不进去）
+function openReminderWithFocus() {
+  if (!mainWindow) return
+  mainWindow.setIgnoreMouseEvents(false)
+  mainWindow.show()
+  mainWindow.focus()
+  send('open:reminder')
 }
 
 // ---------- IPC：宠物资产读取 ----------
@@ -252,6 +261,33 @@ ipcMain.handle('view:getPos', () => {
 // ---------- 提醒系统 + 活动记录（方案B，2026-08-06） ----------
 const reminders = new Map() // id -> { at, repeat, text }
 let reminderSeq = 0
+const REMINDERS_FILE = path.join(app.getPath('home'), '.petpet', 'reminders.json')
+
+// P0-5: 提醒持久化——退出不丢（"每天/每周"提醒的语义就是设一次不用管）
+function loadReminders() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(REMINDERS_FILE, 'utf-8'))
+    for (const [id, r] of Object.entries(raw.reminders || {})) {
+      if (!r || typeof r.at !== 'number' || !r.text) continue
+      reminders.set(id, { at: r.at, repeat: r.repeat || 'none', text: r.text })
+      reminderSeq = Math.max(reminderSeq, parseInt(String(id).replace(/\D/g, '')) || 0)
+    }
+    console.log(`[PetPet] 已载入 ${reminders.size} 条提醒`)
+  } catch (e) {
+    console.log('[PetPet] 无提醒存档或读取失败，从空开始')
+  }
+}
+
+function saveReminders() {
+  try {
+    fs.mkdirSync(path.dirname(REMINDERS_FILE), { recursive: true })
+    const obj = {}
+    for (const [id, r] of reminders) obj[id] = r
+    fs.writeFileSync(REMINDERS_FILE, JSON.stringify({ reminders: obj }, null, 2))
+  } catch (e) {
+    console.error('[PetPet] 提醒存档失败:', e)
+  }
+}
 
 // 校验 petId，防路径穿越
 function safePetId(id) {
@@ -340,7 +376,11 @@ function openDiaryWindow(petId) {
     x,
     y: Math.max(0, pos[1]),
     frame: false,
-    resizable: false,
+    // P1-8: 日记窗口可拖动、可缩放（此前不可移动不可缩放，挡住内容只能退出重开）
+    movable: true,
+    resizable: true,
+    minWidth: 240,
+    minHeight: 240,
     alwaysOnTop: true,
     skipTaskbar: true,
     hasShadow: true,
@@ -373,14 +413,32 @@ ipcMain.handle('reminder:set', (_evt, spec) => {
   const repeat = ['none', 'daily', 'weekly'].includes(spec.repeat) ? spec.repeat : 'none'
   const id = 'r' + (++reminderSeq)
   reminders.set(id, { at: spec.at, repeat, text: String(spec.text || '该办正事啦！') })
+  saveReminders()  // P0-5: 持久化
   console.log(`[PetPet] 提醒已设置 #${id} → ${new Date(spec.at).toLocaleString()} [${repeat}] ${reminders.get(id).text}`)
   return { id }
+})
+
+// P0-5: 提醒列表（查看/删除入口）
+ipcMain.handle('reminder:list', () => {
+  return [...reminders.entries()].map(([id, r]) => ({ id, at: r.at, repeat: r.repeat, text: r.text }))
+})
+
+ipcMain.handle('reminder:del', (_evt, id) => {
+  const existed = reminders.delete(id)
+  if (existed) saveReminders()
+  return { ok: existed }
 })
 
 function fireReminder(id) {
   const r = reminders.get(id)
   if (!r) return
   console.log('[PetPet] 提醒触发 #' + id + ' → ' + r.text)
+  // P1-3: 窗口隐藏时横幅不可见 → 发系统通知兜底；窗口可见仍走横幅
+  if (mainWindow && !mainWindow.isVisible()) {
+    try {
+      new Notification({ title: '⏰ 提醒', body: r.text }).show()
+    } catch (e) { /* 无通知权限时忽略 */ }
+  }
   send('reminder:fire', { id, text: r.text })
   appendActivity(currentPetId || 'redshao', { mood: '提醒', text: `${currentPetName || '宠物'}提醒你：` + r.text })
   if (r.repeat === 'daily') {
@@ -390,6 +448,7 @@ function fireReminder(id) {
   } else {
     reminders.delete(id)
   }
+  saveReminders()  // P0-5: 重复提醒推进/一次性删除都要落盘
 }
 
 // 每秒检查（桌宠常驻，开销可忽略；避免超长 setTimeout 超 2^31-1ms 溢出问题）
@@ -400,44 +459,12 @@ setInterval(() => {
   }
 }, 1000)
 
-// 主题切换：写入 pet.json 的 theme 字段（bro/sis/orange）
-const THEMES = ['bro', 'sis', 'orange']
-function setThemeFromMain(theme) {
-  if (!THEMES.includes(theme)) return
-  try {
-    const p = path.join(PETS_ROOT, currentPetId || 'redshao', 'pet.json')
-    const d = JSON.parse(fs.readFileSync(p, 'utf-8'))
-    d.theme = theme
-    fs.writeFileSync(p, JSON.stringify(d, null, 2))
-    currentTheme = theme
-    console.log(`[PetPet] 主题已切换 ${currentPetId} → ${theme}`)
-  } catch (e) {
-    console.error('[PetPet] 写主题失败:', e)
-  }
-  send('theme:set', theme)
-  rebuildTrayMenu()
-}
-
-ipcMain.on('pet:theme', (_evt, petId, theme) => {
-  const pid = safePetId(petId)
-  if (!pid || !THEMES.includes(theme)) return
-  try {
-    const p = path.join(PETS_ROOT, pid, 'pet.json')
-    const d = JSON.parse(fs.readFileSync(p, 'utf-8'))
-    d.theme = theme
-    fs.writeFileSync(p, JSON.stringify(d, null, 2))
-    currentTheme = theme
-    console.log(`[PetPet] 主题已切换 ${pid} → ${theme}`)
-    rebuildTrayMenu()
-  } catch (e) {
-    console.error('[PetPet] 写主题失败:', e)
-  }
-})
-
 // ---------- 生命周期 ----------
 // 截图测试模式：electron . --screenshot=/tmp/x.png [--action=run]
 const shotArg = process.argv.find(a => a.startsWith('--screenshot='))
 const testAction = process.argv.find(a => a.startsWith('--action='))?.split('=')[1]
+// P0-4 验证用：--open-reminder 启动后自动打开提醒面板（验证面板可交互/焦点）
+const openReminderArg = process.argv.includes('--open-reminder')
 
 app.whenReady().then(() => {
   createWindow()
@@ -455,6 +482,12 @@ app.whenReady().then(() => {
     if (testAction) {
       mainWindow.webContents.once('did-finish-load', () => {
         setTimeout(() => send('test:action', testAction), 1500)
+      })
+    }
+    // P0-4 验证：自动打开提醒面板（等效 openReminderWithFocus 的效果）
+    if (openReminderArg) {
+      mainWindow.webContents.once('did-finish-load', () => {
+        setTimeout(() => openReminderWithFocus(), 1200)
       })
     }
     const out = shotArg.split('=')[1]

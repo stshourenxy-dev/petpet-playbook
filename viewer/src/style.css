@@ -57,7 +57,7 @@ html, body {
   left: 50%;
   top: 8px;
   transform: translateX(-50%);
-  max-width: 200px;
+  max-width: calc(100% - 16px);  /* P1-6: 小窗口下气泡不被裁边 */
   padding: 7px 13px;
   background: var(--bubble-bg);
   -webkit-backdrop-filter: blur(22px) saturate(1.8);
@@ -180,7 +180,7 @@ html, body {
 }
 
 #reminder-panel {
-  width: 250px;
+  width: min(250px, calc(100% - 16px));  /* P1-6: 小窗口下自适应，不再被窗口裁切 */
   left: 50%;
   top: 56px;
   transform: translateX(-50%);
@@ -256,7 +256,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: 300px;
+  max-width: calc(100% - 16px);  /* P1-6: 长文案不再溢出窗口 */
   background: var(--bar-bg);
   -webkit-backdrop-filter: blur(30px) saturate(1.8);
   backdrop-filter: blur(30px) saturate(1.8);
