@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "id": "redshao-demo",
+  "name": "红苕",
+  "style": "illustration",
+  "cellWidth": 512,
+  "cellHeight": 288,
+  "actions": {
+    "idle": {
+      "sprite": "knead/knead_sheet.png",
+      "frames": 12,
+      "fps": 5,
+      "loop": true,
+      "weight": 100,
+      "frameWidth": 512,
+      "frameHeight": 288,
+      "scale": 1
+    },
+    "sleep": {
+      "frames": 12,
+      "sprite": "sleep/sleep_sprite.png",
+      "frameWidth": 512,
+      "frameHeight": 512,
+      "fps": 5,
+      "loop": true,
+      "weight": 10,
+      "scale": 1.1
+    }
+  },
+  "theme": "bro"
+}
