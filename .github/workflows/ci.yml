@@ -28,6 +28,8 @@ jobs:
         run: python tests/smoke_test.py
       - name: 单元测试（边界情况）
         run: pytest tests/test_pipeline.py -v
+      - name: 宠物包校验（demo v3）
+        run: python pipeline/validate_pet.py examples/redshao-demo/
 
   viewer-build:
     name: 客户端构建
