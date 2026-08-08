@@ -45,13 +45,19 @@ python pipeline/remove_bg.py     --input selected/ --output cutout/
 python pipeline/clean_cutout.py  --input cutout/   --output clean/
 python pipeline/make_sheet.py    --input clean/    --output . --name mypet.png
 
-# 3. 得到精灵表后，按 08-接口协议 配置 pet.json 部署
+# 3. 得到精灵表后，按 08-接口协议 配置 pet.json，用校验器检查
+python pipeline/validate_pet.py mypet/            # 校验宠物包（缺字段/纹理超限会报错）
+
+# 4.（可选）从宠物画像生成提示词：
+#    python pipeline/validate_pet.py --profile pet-profile.json   # 先校验画像+算派生比例
+#    python pipeline/gen_prompt.py --profile pet-profile.derived.json --action stretch
 ```
 
 **验证环境**（可选）：
 
 ```bash
 python tests/smoke_test.py   # 管线冒烟测试（造数据→选帧→清理→拼表→超限拦截）
+pytest tests/                # 单元测试（21 个：管线边界 + 校验器 + 提示词生成）
 ```
 
 > 💰 **预算提示**：每个动作的 AI 视频生成约 45-130 积分（即梦平台，2.0/2.5 模型），完整 8 动作是数百积分量级的真实付费成本，动手前先评估。
@@ -68,7 +74,7 @@ npm run build        # 构建渲染层（dist/）
 npm start            # 构建后直接启动
 ```
 
-宠物包结构见 08-接口协议。**想立刻看到效果**：`examples/redshao-demo/` 是一个可直接运行的**最小示例宠物包**（抱熊待机 + 睡觉两个动作，压缩至 512px，~4.4MB）——复制到用户数据目录即可：
+宠物包结构见 08-接口协议。**想立刻看到效果**：`examples/redshao-demo/` 是一个可直接运行的**最小示例宠物包**（抱熊待机 + 睡觉 + 伸懒腰三个动作，v3 契约含 `sleep→stretch` 行为转移链，压缩至 512px，~6MB）——复制到用户数据目录即可：
 
 ```bash
 # macOS
@@ -109,7 +115,7 @@ graph LR
 ```
 
 - ①②是**一次性**（宠物特征采集 + 设定图核实）；③-⑧是**每动作一次**（素材管线，脚本在 `pipeline/`）；⑨⑩是**增量**（加动作只改数据不改代码）
-- 想快速上手：`pipeline/` 四个脚本串起来就是 ④-⑧，每步工具可替换（见 [05-素材管线](docs/05-素材管线.md)）
+- 想快速上手：`pipeline/` 六个脚本串起来就是 ④-⑧——**⑤校验器（validate_pet.py）** 打包前必跑，**⑥提示词生成（gen_prompt.py）** 从画像直接产出提示词（见 02）；每步工具可替换（见 [05-素材管线](docs/05-素材管线.md)）
 
 ---
 
@@ -118,11 +124,13 @@ graph LR
 ```
 petpet-playbook/
 ├── README.md            本文档（全景图 + 导航）
-├── docs/                方法论文档（00-10 共 11 篇 + 审查清单）
-├── pipeline/            可运行脚本（选帧/抠图/清理/拼表，含 ruff 配置）
+├── docs/                方法论文档（00-12 共 13 篇 + 审查清单）
+├── pipeline/            可运行脚本（选帧/抠图/清理/拼表/校验/提示词，含 ruff 配置）
+├── schema/              机器可读契约（pet.json v3 + 宠物画像 16 字段）
+├── templates/           填空模板（pet-profile.example.json）
 ├── viewer/              客户端参考实现（Electron + PixiJS 源码）
 ├── tests/               管线测试（冒烟 + pytest 单元测试）
-├── examples/           实例素材（redshao-demo：可运行最小宠物包；redshao：边牧完整闭环；baobao：金毛×德牧混血第二样本）
+├── examples/           实例素材（redshao-demo：可运行最小宠物包 v3；redshao：边牧完整闭环；baobao：金毛×德牧混血第二样本）
 ├── requirements.txt     Python 依赖（含版本上下界）
 ├── pyproject.toml       ruff 配置
 ├── LICENSE              MIT（代码）+ 素材版权声明
