@@ -1,6 +1,11 @@
 # PetPet Playbook · 桌宠制作方法论
 
+[English](README.en.md) | **中文**
+
 ![CI](https://github.com/stshourenxy-dev/petpet-playbook/actions/workflows/ci.yml/badge.svg)
+![Release](https://img.shields.io/github/v/release/stshourenxy-dev/petpet-playbook)
+![Platform](https://img.shields.io/badge/平台-macOS%20%7C%20Windows-3e7c5a)
+![License](https://img.shields.io/github/license/stshourenxy-dev/petpet-playbook)
 
 > 不是"又一个桌宠软件"，是**给心爱的宠物做一只活在电脑里的替身**——用 AI 生成它自己的形象、自己的动作、自己的性格，让它在工作时陪着你。
 
@@ -123,12 +128,13 @@ graph LR
 
 ```
 petpet-playbook/
-├── README.md            本文档（全景图 + 导航）
-├── docs/                方法论文档（00-12 共 13 篇 + 审查清单）
+├── README.md            本文档（全景图 + 导航）/ README.en.md（英文版）
+├── docs/                方法论文档（00-12 共 13 篇 + 宠物包收录 + 审查清单）
 ├── pipeline/            可运行脚本（选帧/抠图/清理/拼表/校验/提示词，含 ruff 配置）
 ├── schema/              机器可读契约（pet.json v3 + 宠物画像 16 字段）
 ├── templates/           填空模板（pet-profile.example.json）
 ├── viewer/              客户端参考实现（Electron + PixiJS 源码）
+├── skills/              AI 助手工作指南（petpet/SKILL.md）
 ├── tests/               管线测试（冒烟 + pytest 单元测试）
 ├── examples/           实例素材（redshao-demo：可运行最小宠物包 v3；redshao：边牧完整闭环；baobao：金毛×德牧混血第二样本）
 ├── requirements.txt     Python 依赖（含版本上下界）
@@ -155,6 +161,9 @@ docs/
 ├── 08-接口协议.md     pet.json Schema、动作注册表、可定制点
 ├── 09-双端适配.md     macOS 已实测、Windows 风险点与验证方案
 ├── 10-架构升级评估.md  客户端运行时架构缺口评估（状态仲裁/事件层/主题包，分 P0-P2）
+├── 11-同类项目借鉴.md  主流桌宠项目实测与借鉴决策（Shimeji/DyberPet/…）
+├── 12-优化路线图.md    三轮审查产出合流：运行时/数据链路/分发生态三批次
+├── 宠物包收录.md      用本方法论做出的宠物包登记（只收链接）
 └── 审查清单.md       对抗性 UI/UX 审查方法（发布前陌生人视角走查）
 ```
 
