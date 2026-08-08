@@ -56,7 +56,14 @@ jobs:
         run: npm ci
         working-directory: viewer
       - name: 打包 Windows 安装包（nsis + portable）
-        run: npm run dist
+        shell: bash
+        run: |
+          npm run dist 2>&1 | tee /tmp/dist.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo "::group::electron-builder 日志尾部"
+          tail -40 /tmp/dist.log
+          echo "::endgroup::"
+          exit $EXIT_CODE
         working-directory: viewer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
