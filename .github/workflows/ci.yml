@@ -58,10 +58,10 @@ jobs:
       - name: 打包 Windows 安装包（nsis + portable）
         shell: bash
         run: |
-          npm run dist 2>&1 | tee /tmp/dist.log
+          npm run dist 2>&1 | tee dist.log
           EXIT_CODE=${PIPESTATUS[0]}
           echo "::group::electron-builder 日志尾部"
-          tail -60 /tmp/dist.log
+          tail -60 dist.log
           echo "::endgroup::"
           exit $EXIT_CODE
         working-directory: viewer
