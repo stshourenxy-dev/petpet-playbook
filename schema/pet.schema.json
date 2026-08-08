@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/stshourenxy-dev/petpet-playbook/schema/pet.schema.json",
+  "title": "宠物包契约（pet.json）",
+  "description": "运行时宠物包配置（docs/08-接口协议.md §2）。v3：新增 bubbles / diary / label 文案下沉字段，启用 transitions 转移链。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "id", "name", "actions"],
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 3,
+      "description": "配置版本（当前 3）"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]+$",
+      "description": "宠物标识（= 目录名）"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "显示名"
+    },
+    "style": {
+      "type": "string",
+      "description": "风格标签（元信息，不参与渲染）"
+    },
+    "theme": {
+      "type": "string",
+      "enum": ["bro", "sis", "orange"],
+      "description": "主题"
+    },
+    "cellWidth": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "后备帧宽（旧字段，仅当动作未提供 frameWidth 时用于切片）"
+    },
+    "cellHeight": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "后备帧高（旧字段）"
+    },
+    "bubbles": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "互动气泡文案池（替代代码硬编码 BUBBLE_TEXTS；未写则用内置默认）"
+    },
+    "actions": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z0-9_-]+$",
+        "description": "动作名（^[a-z0-9_-]+$）"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/action"
+      }
+    }
+  },
+  "$defs": {
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frames", "frameWidth", "frameHeight"],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "精灵表路径（相对宠物目录；与 sprite 二选一）"
+        },
+        "sprite": {
+          "type": "string",
+          "minLength": 1,
+          "description": "精灵表路径别名（与 file 等价）"
+        },
+        "frames": {
+          "type": "number",
+          "minimum": 1,
+          "description": "帧数（横向切片数）"
+        },
+        "fps": {
+          "type": "number",
+          "minimum": 1,
+          "default": 4,
+          "description": "播放帧率（代码默认 4）"
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "随机权重（默认 0 = 不参与随机演示）"
+        },
+        "pingpong": {
+          "type": "boolean",
+          "default": false,
+          "description": "往返播放"
+        },
+        "frameWidth": {
+          "type": "number",
+          "minimum": 1,
+          "description": "单帧宽（= 表宽/帧数）"
+        },
+        "frameHeight": {
+          "type": "number",
+          "minimum": 1,
+          "description": "单帧高"
+        },
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 1.0,
+          "description": "显示缩放"
+        },
+        "loop": {
+          "type": "boolean",
+          "default": true,
+          "description": "循环播放"
+        },
+        "transitions": {
+          "type": "object",
+          "description": "动作间转移权重（马尔可夫链：播完后按此表选择下一动作；缺省则退回全局 weight 池）",
+          "propertyNames": {
+            "pattern": "^[a-z0-9_-]+$"
+          },
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "label": {
+          "type": "string",
+          "description": "菜单显示名（自定义动作在菜单里显示 label 而非原始动作 key）"
+        },
+        "diary": {
+          "type": "object",
+          "description": "动作→日记心情文案（替代代码硬编码 ACTIVITY_TEXTS）",
+          "additionalProperties": false,
+          "required": ["mood", "text"],
+          "properties": {
+            "mood": {
+              "type": "string",
+              "minLength": 1,
+              "description": "心情标签（如 安逸/好奇/开心）"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "description": "心情文案（支持 {name} 占位符，运行时替换为宠物名）"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/stshourenxy-dev/petpet-playbook/schema/pet-profile.schema.json",
+  "title": "宠物画像（特征收集表）",
+  "description": "画像层 16 字段（docs/01-数据模型.md §3.2）。字段名与文档一一对应；生日/到家时间为一行双值。派生字段（ratio/legRatio）由 validator 自动计算，勿手填。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["owner", "name", "breed", "gender", "ageStage", "devices", "lengthCm", "heightCm", "legCm", "widthCm", "build", "notes"],
+  "properties": {
+    "owner": {
+      "type": "string",
+      "minLength": 1,
+      "description": "主人昵称（数据归属/多主人协作分组）"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]+$",
+      "description": "宠物名字（= 目录名 pets/<name>/，与运行时 id 一致）"
+    },
+    "breed": {
+      "type": "string",
+      "minLength": 1,
+      "description": "品种基线（提示词品种锚点，如「棕白边牧」「柯基」）"
+    },
+    "gender": {
+      "type": "string",
+      "enum": ["公", "母"],
+      "description": "性别（主题默认 + 文案人称）"
+    },
+    "birthday": {
+      "type": "string",
+      "format": "date",
+      "description": "生日（彩蛋系统事件源）"
+    },
+    "gotchaDay": {
+      "type": "string",
+      "format": "date",
+      "description": "到家时间（纪念日事件源，与生日分开记）"
+    },
+    "ageStage": {
+      "type": "string",
+      "enum": ["幼年", "成年", "老年"],
+      "description": "希望出几岁模型（生成形象年龄定义，预留多年龄版本）"
+    },
+    "devices": {
+      "type": "string",
+      "enum": ["Windows", "Mac", "双端"],
+      "description": "客户端设备（打包目标 + UI 适配范围）"
+    },
+    "lengthCm": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "体长 cm（原始测量）"
+    },
+    "heightCm": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "体高 cm（原始测量，比例基准 = 1）"
+    },
+    "legCm": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "腿长 cm（原始测量）"
+    },
+    "widthCm": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "体宽 cm（原始测量）"
+    },
+    "build": {
+      "type": "string",
+      "enum": ["细长", "标准", "粗壮", "胖墩"],
+      "description": "体型离散分类（比测量值更直观的体型锚点）"
+    },
+    "ratio": {
+      "type": "string",
+      "readOnly": true,
+      "description": "派生：长宽高比例 体长:体宽:体高（体高=1，如 1.2:0.4:1）。自动计算，勿手填"
+    },
+    "legRatio": {
+      "type": "string",
+      "readOnly": true,
+      "description": "派生：腿长比 腿长:体高（如 0.6:1）。自动计算，勿手填"
+    },
+    "notes": {
+      "type": "string",
+      "description": "补充说明：花色/特征/照片拍不清的细节（直接进提示词）"
+    },
+    "photos": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "照片路径列表：正面清晰照 + 其他角度"
+    }
+  }
+}
