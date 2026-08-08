@@ -28,15 +28,18 @@ function renderStatus(info) {
 
 document.getElementById('close').addEventListener('click', () => window.panelAPI.close())
 
-window.panelAPI.onDiaryData(({ entries, theme, status }) => {
+window.panelAPI.onDiaryData(({ entries, theme, status, petName }) => {
   document.body.dataset.theme = theme || 'bro' // bro=弟弟 / sis=妹妹
+  const name = petName || '宠物'
+  document.title = name + '日记'
+  document.getElementById('title').textContent = '📖 ' + name + '日记'
   renderStatus(status)
   countEl.textContent = entries.length ? `（共 ${entries.length} 条）` : ''
   listEl.innerHTML = ''
   if (!entries.length) {
     const empty = document.createElement('div')
     empty.className = 'empty'
-    empty.textContent = '还没有日记，去戳戳红苕吧～'
+    empty.textContent = `还没有日记，去戳戳${name}吧～`
     listEl.appendChild(empty)
     return
   }
