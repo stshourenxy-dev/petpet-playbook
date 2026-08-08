@@ -15,11 +15,14 @@ jobs:
   pipeline-test:
     name: 素材管线测试
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
           cache: 'pip'
       - name: 安装依赖（验证 requirements.txt 本身有效）
         run: pip install -r requirements.txt pytest ruff
