@@ -10,6 +10,8 @@
 用法：
     python make_sheet.py --input <clean_dir> --output <out_dir> [--cell 1024] [--pad 0.06] [--name mysheet.png]
 """
+from __future__ import annotations  # 3.9 兼容：注解惰性求值，可用 X | None 语法
+
 import argparse
 import os
 import sys
@@ -18,7 +20,7 @@ import numpy as np
 from PIL import Image
 
 
-def alpha_bbox(img):
+def alpha_bbox(img: Image.Image) -> tuple[int, int, int, int] | None:
     a = np.asarray(img)[:, :, 3]
     ys, xs = np.where(a > 10)
     if len(xs) == 0:
@@ -27,7 +29,8 @@ def alpha_bbox(img):
     return xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
 
 
-def make_sheet(input_dir, out_dir, cell=1024, pad_ratio=0.06, name=None):
+def make_sheet(input_dir: str, out_dir: str, cell: int = 1024,
+               pad_ratio: float = 0.06, name: str | None = None) -> int:
     os.makedirs(out_dir, exist_ok=True)
     frames = sorted(f for f in os.listdir(input_dir) if f.endswith('.png'))
     if not frames:
@@ -53,7 +56,7 @@ def make_sheet(input_dir, out_dir, cell=1024, pad_ratio=0.06, name=None):
     # A-3: 全局 scale——所有帧共用同一缩放系数（避免每帧各自缩放导致动画"胀缩呼吸"）
     gscale = min(1.0, (target - pad * 2) / max(max_w, max_h))
 
-    frames_out = []
+    frames_out: list[Image.Image] = []
     for i, (img, box) in enumerate(zip(imgs, boxes)):
         if box is None:
             # 空透明帧：警告而非静默（可能是抠图失败/全透明帧）
@@ -95,7 +98,7 @@ def make_sheet(input_dir, out_dir, cell=1024, pad_ratio=0.06, name=None):
     return target
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description='裁切对齐并合成精灵表')
     parser.add_argument('--input', required=True, help='清理后帧目录（RGBA）')
     parser.add_argument('--output', required=True, help='精灵表输出目录')

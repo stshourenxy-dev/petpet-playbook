@@ -19,7 +19,7 @@ from PIL import Image
 from scipy import ndimage
 
 
-def clean(img, min_size=500):
+def clean(img: Image.Image, min_size: int = 500) -> Image.Image:
     """删掉面积 < min_size 的连通域，其余全部保留"""
     a = np.asarray(img)[:, :, 3]
     mask = a > 10
@@ -41,7 +41,7 @@ def clean(img, min_size=500):
     return Image.fromarray(arr)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description='清理抠图噪点（保留所有连通域）')
     parser.add_argument('--input', required=True, help='抠图目录（RGBA）')
     parser.add_argument('--output', required=True, help='清理输出目录')

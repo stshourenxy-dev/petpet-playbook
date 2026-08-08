@@ -16,7 +16,7 @@ from PIL import Image
 from rembg import remove
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description='rembg 语义分割抠图')
     parser.add_argument('--input', required=True, help='选中帧目录')
     parser.add_argument('--output', required=True, help='抠图输出目录（RGBA）')
