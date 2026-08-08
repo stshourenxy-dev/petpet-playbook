@@ -1,10 +1,18 @@
 // PetPet 桌宠查看器 - 主进程
 // Electron 主进程：透明窗口、托盘、IPC 文件读取
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage } = require('electron')
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, protocol, net } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const { pathToFileURL } = require('url')
 
 const PETS_ROOT = path.join(app.getPath('home'), '.petpet', 'pets')
+
+// N-3：注册自定义协议（需在 app ready 前），渲染层用短 URL 流式读资产
+// petpet://<petId>/<relPath> → 文件系统，零 base64、零主进程内存驻留
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'petpet', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }
+])
+
 let mainWindow = null
 let tray = null
 let currentPetId = null
@@ -258,6 +266,7 @@ const MIME = {
 }
 
 ipcMain.handle('pet:file', (_evt, petId, relPath) => {
+  // N-3：优先走 petpet:// 协议（渲染层用短 URL），此 IPC 保留为兼容 fallback
   try {
     const safe = safePetId(petId)
     if (!safe) return { error: 'invalid pet id' }
@@ -273,6 +282,24 @@ ipcMain.handle('pet:file', (_evt, petId, relPath) => {
     return { error: String(e) }
   }
 })
+
+// N-3：petpet:// 自定义协议——流式读宠物资产，路径边界检查复用 D-2 写法
+function registerPetpetProtocol() {
+  protocol.handle('petpet', async (req) => {
+    try {
+      const u = new URL(req.url)
+      const petId = u.hostname
+      const relPath = decodeURIComponent(u.pathname).replace(/^\//, '')
+      if (!safePetId(petId)) return new Response(null, { status: 403 })
+      const full = path.join(PETS_ROOT, petId, relPath)
+      const rel = path.relative(PETS_ROOT, full)
+      if (rel.startsWith('..') || path.isAbsolute(rel)) return new Response(null, { status: 403 })
+      return net.fetch(pathToFileURL(full).toString())
+    } catch (e) {
+      return new Response(null, { status: 404 })
+    }
+  })
+}
 
 // 窗口尺寸变化（渲染进程请求调整窗口大小）
 ipcMain.on('view:setSize', (_evt, w, h) => {
@@ -514,6 +541,7 @@ const testAction = process.argv.find(a => a.startsWith('--action='))?.split('=')
 const openReminderArg = process.argv.includes('--open-reminder')
 
 app.whenReady().then(() => {
+  registerPetpetProtocol()  // N-3：自定义协议（CSP 已放行 petpet:）
   createWindow()
   // macOS Dock 图标：示例宠物头像（内嵌 base64，打包后有效；换宠物时替换此图标）
   if (process.platform === 'darwin' && app.dock) {

@@ -256,6 +256,14 @@ async function init() {
 
 // ================= 宠物加载 =================
 async function loadPet(id: string) {
+  // N-1：先释放上一只宠物的 GPU 资源（P0-1 修复引入的回归：只丢引用不释放显存）
+  // 必须在 textures = {} 之前——否则对象被替换后 GC 够不着（Assets 缓存持有强引用）
+  if (sprite) { sprite.destroy(); sprite = null }
+  for (const frames of Object.values(textures)) {
+    for (const f of frames) f.destroy()   // Texture.destroy() 连 TextureSource 一起销毁
+  }
+  textures = {}
+
   petId = id
   const data = await window.petAPI.loadPet(id)
   if (!data || data.error) {
@@ -264,7 +272,6 @@ async function loadPet(id: string) {
     throw new Error(msg)
   }
   pet = data
-  textures = {}
   // P2-3: 宠物加载后更新 canvas 的 aria-label（init 时 pet 还未加载）
   if (app.canvas) {
     app.canvas.setAttribute('aria-label', `${pet.name}（桌面宠物）`)
@@ -274,39 +281,47 @@ async function loadPet(id: string) {
   // 通知主进程当前宠物（托盘动作菜单用）
   window.petAPI.notifyPetLoaded(id)
 
-  // 并行预加载所有动作精灵表
-  await Promise.all(
-    Object.entries(pet.actions).map(async ([name, act]) => {
-      const rel = act.file || act.sprite
-      if (!rel) return
-      const res = await window.petAPI.getFile(petId, rel)
-      if (!res.dataUrl) {
-        console.warn(`动作 ${name} 精灵表加载失败: ${res.error}`)
-        return
-      }
-      try {
-        const tex = await PIXI.Assets.load(res.dataUrl)
-        const cw = act.frameWidth || pet!.cellWidth
-        const ch = act.frameHeight || pet!.cellHeight
-        const cols = Math.max(1, Math.floor(tex.width / cw))
-        const frames: PIXI.Texture[] = []
-        for (let i = 0; i < act.frames; i++) {
-          const col = i % cols
-          frames.push(new PIXI.Texture({
-            source: tex.source,
-            frame: new PIXI.Rectangle(col * cw, 0, cw, ch)
-          }))
-        }
-        textures[name] = frames
-      } catch (err) {
-        console.error(`动作 ${name} 纹理切片失败`, err)
-      }
-    })
-  )
-
-  const firstAction = Object.keys(pet.actions)[0] || 'idle'
-  playAction(firstAction, 'init') // 初始加载：直接播放（不经仲裁，init 语义）
+  const names = Object.keys(pet.actions)
+  // N-2：先加载首个动作 → 立刻有画面，其余后台补（此前 await Promise.all 全部加载完才画第一帧，冷启动秒级空窗）
+  await loadAction(names[0])
+  playAction(names[0], 'init') // 初始加载：直接播放（不经仲裁，init 语义）
+  void Promise.all(names.slice(1).map(loadAction))  // 其余不阻塞首帧
   updateTitle()
+}
+
+// 加载单个动作的精灵表 → 切片 → 存入 textures[name]
+async function loadAction(name: string) {
+  if (!pet) return
+  const act = pet.actions[name]
+  const rel = act.file || act.sprite
+  if (!rel || textures[name]) return
+  // N-3：优先 petpet:// 协议短 URL（零 base64、流式读盘、Assets 缓存键稳定）；
+  // 协议不可用时回退 dataURL（getFile 保留 IPC 兼容路径）
+  const url = `petpet://${petId}/${rel}`
+  let tex: PIXI.Texture
+  try {
+    tex = await PIXI.Assets.load(url)
+  } catch (e) {
+    console.warn(`动作 ${name} 协议加载失败，回退 IPC: ${e}`)
+    const res = await window.petAPI.getFile(petId, rel)
+    if (!res.dataUrl) {
+      console.warn(`动作 ${name} 精灵表加载失败: ${res.error}`)
+      return
+    }
+    tex = await PIXI.Assets.load(res.dataUrl)
+  }
+  const cw = act.frameWidth || pet!.cellWidth
+  const ch = act.frameHeight || pet!.cellHeight
+  const cols = Math.max(1, Math.floor(tex.width / cw))
+  const frames: PIXI.Texture[] = []
+  for (let i = 0; i < act.frames; i++) {
+    const col = i % cols
+    frames.push(new PIXI.Texture({
+      source: tex.source,
+      frame: new PIXI.Rectangle(col * cw, 0, cw, ch)
+    }))
+  }
+  textures[name] = frames
 }
 
 function updateTitle() {
