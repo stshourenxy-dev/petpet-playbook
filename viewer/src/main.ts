@@ -78,7 +78,7 @@ declare global {
 const app = new PIXI.Application()
 
 let pet: PetJson | null = null
-let petId = 'redshao'
+let petId = ''
 let sprite: PIXI.AnimatedSprite | null = null
 let textures: Record<string, PIXI.Texture[]> = {}
 let currentAction = 'idle'

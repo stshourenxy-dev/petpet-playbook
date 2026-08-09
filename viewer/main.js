@@ -185,7 +185,7 @@ function rebuildTrayMenu() {
 
   // 方案B：功能入口兜底（右键手势不可用时从托盘调出）
   template.push({ type: 'separator' })
-  template.push({ label: `📖 ${petName}日记`, click: () => openDiaryWindow(currentPetId || pets[0] || 'redshao') })
+  template.push({ label: `📖 ${petName}日记`, click: () => openDiaryWindow(currentPetId || pets[0] || '') })
   template.push({ label: '⏰ 提醒我', click: () => openReminderWithFocus() })
 
   template.push({ type: 'separator' })
@@ -232,7 +232,7 @@ ipcMain.handle('menu:showContext', (_evt, x, y) => {
     { label: petName, enabled: false },
     { type: 'separator' },
     { label: '⏰ 提醒我', click: () => openReminderWithFocus() },
-    { label: `📖 ${petName}日记`, click: () => openDiaryWindow(currentPetId || 'redshao') },
+    { label: `📖 ${petName}日记`, click: () => openDiaryWindow(currentPetId || '') },
     { type: 'separator' }
   ]
   if (currentPetActions && Object.keys(currentPetActions).length > 0) {
@@ -448,13 +448,22 @@ function safePetId(id) {
   return typeof id === 'string' && /^[a-z0-9_-]+$/i.test(id) ? id : null
 }
 
+// 解析有效 petId：preferred 优先，其次当前宠物；两者都无效返回 null
+// （P0-1 延续：不再回退硬编码示例宠物，避免日记/活动记录写错目录）
+function resolvePetId(preferred) {
+  return safePetId(preferred) || safePetId(currentPetId)
+}
+
 function activityPath(petId) {
   return path.join(PETS_ROOT, petId, 'activity.json')
 }
 
 function appendActivity(petId, entry) {
-  const pid = safePetId(petId) || currentPetId || 'redshao'
-  if (!pid) return
+  const pid = safePetId(petId) || safePetId(currentPetId)
+  if (!pid) {
+    console.warn('[PetPet] appendActivity 跳过：无有效 petId')
+    return
+  }
   try {
     const p = activityPath(pid)
     let list = []
@@ -506,14 +515,20 @@ ipcMain.on('pet:action:notify', (_evt, info) => {
 let currentTheme = 'bro'
 
 function openDiaryWindow(petId) {
+  // 无有效 petId 时给出可见错误，不再回退示例宠物（避免日记/活动写到错误目录）
+  const pid = resolvePetId(petId)
+  if (!pid) {
+    dialog.showErrorBox('无法打开日记', '没有可用的宠物：未找到宠物包或宠物尚未加载')
+    return
+  }
   const theme = (() => {
     try {
-      return JSON.parse(fs.readFileSync(path.join(PETS_ROOT, safePetId(petId) || 'redshao', 'pet.json'), 'utf-8')).theme || 'bro'
+      return JSON.parse(fs.readFileSync(path.join(PETS_ROOT, pid, 'pet.json'), 'utf-8')).theme || 'bro'
     } catch (e) {
       return 'bro'
     }
   })()
-  const sendData = (win) => win.webContents.send('diary:data', { petId, petName: currentPetName, theme, entries: readActivity(petId), status: currentActionInfo })
+  const sendData = (win) => win.webContents.send('diary:data', { petId: pid, petName: currentPetName, theme, entries: readActivity(pid), status: currentActionInfo })
   if (diaryWindow && !diaryWindow.isDestroyed()) {
     diaryWindow.focus()
     sendData(diaryWindow)
@@ -600,7 +615,7 @@ function fireReminder(id) {
     } catch (e) { /* 无通知权限时忽略 */ }
   }
   send('reminder:fire', { id, text: r.text })
-  appendActivity(currentPetId || 'redshao', { mood: '提醒', text: `${currentPetName || '宠物'}提醒你：` + r.text })
+  appendActivity(currentPetId || '', { mood: '提醒', text: `${currentPetName || '宠物'}提醒你：` + r.text })
   if (r.repeat === 'daily') {
     r.at += 24 * 3600 * 1000
   } else if (r.repeat === 'weekly') {
