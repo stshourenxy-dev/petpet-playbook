@@ -91,6 +91,7 @@ try {
 let pingpongDir = 1
 let bubbleTimer: ReturnType<typeof setTimeout> | null = null
 let randomTimer: ReturnType<typeof setInterval> | null = null
+let transitionTimer: ReturnType<typeof setTimeout> | null = null // 行为链调度（scheduleTransition）
 let reminderBarOn = false
 // 渲染进程跟踪的窗口状态（初始 = 主进程创建尺寸/位置；本地维护，避免异步竞态漂移）
 let curWinW = 320
@@ -280,6 +281,8 @@ async function loadPet(id: string) {
     for (const f of frames) f.destroy()   // Texture.destroy() 连 TextureSource 一起销毁
   }
   textures = {}
+  // 切换宠物/动作时取消挂起的转移调度（防止旧宠物转移定时器在新宠物上触发）
+  if (transitionTimer) { clearTimeout(transitionTimer); transitionTimer = null }
 
   petId = id
   const data = await window.petAPI.loadPet(id)
@@ -392,6 +395,9 @@ function playAction(name: string, source: 'menu' | 'reminder' | 'random' | 'init
   currentAction = name
   applyScale()
   sprite.play()
+  // 行为链调度：仅自动行为源（random/transition）挂转移定时器——
+  // 用户手动/提醒进入的动作不设转移（state-priority 设计意图：手动切换不被自动打断）
+  if (source === 'random' || source === 'transition') scheduleTransition(name)
 }
 
 // 缩放约束：0.5x ~ 2x（窗口跟随缩放，永远完整显示全身，不裁切）
@@ -573,6 +579,36 @@ function setupUI() {
 // ================= 随机行为 =================
 // P0：随机触发经 requestAction('random') 仲裁——只在待机时触发（守卫已在 shouldPlay），
 // 且回 idle 带守卫：仅当“当前仍是本次随机动作”时才回（修复：用户/提醒打断后不再被强制拉回 idle）
+
+// 统一行为链调度（替代原内联 4s 补丁）：
+// 按时长 frames/fps 估算（钳制 2–12s）；到点且未被更高优先级动作打断时，
+// 有 transitions 则按权重转移（transition 源），否则回 idle（init 源）
+function scheduleTransition(name: string) {
+  if (transitionTimer) { clearTimeout(transitionTimer); transitionTimer = null }
+  const act = pet?.actions?.[name]
+  if (!act) return
+  const durMs = Math.min(12000, Math.max(2000, ((act.frames || 1) / (act.fps || 4)) * 1000))
+  transitionTimer = setTimeout(() => {
+    transitionTimer = null
+    if (!pet || currentAction !== name) return
+    const trans = act.transitions
+    if (trans && Object.keys(trans).length > 0) {
+      // 转移链：按权重选下一个动作（Shimeji NextBehaviorList 思路，docs/11 §2.1）
+      const pool = Object.entries(trans).filter(([n, w]) => textures[n] && n !== name && w > 0)
+      if (pool.length > 0) {
+        const total = pool.reduce((s, [, w]) => s + w, 0)
+        let r = Math.random() * total
+        for (const [n, w] of pool) {
+          r -= w
+          if (r <= 0) { requestAction(n, 'transition'); return }
+        }
+      }
+    }
+    // 无转移链 → 回 idle（init 源，绕开 random 源互斥守卫）
+    requestAction('idle', 'init')
+  }, durMs)
+}
+
 function startRandomBehavior() {
   if (randomTimer) clearInterval(randomTimer)
   randomTimer = setInterval(() => {
@@ -591,33 +627,6 @@ function startRandomBehavior() {
       r -= effectiveWeight(name, act.weight ?? 0, pet?.temperament)
       if (r <= 0) {
         requestAction(name, 'random')
-        // 播完后按转移链（transitions）或回 idle——带守卫：仅当未被更高优先级动作打断时
-        // P0-1 修复延续：回 idle 走 init 源（random 源守卫要求 currentAction==='idle'，会与
-        // currentAction===name 互斥导致随机行为永久停摆）；有 transitions 则链式转移（transition 源）
-        const backTo = Object.keys(pet.actions).find(k => k === 'idle')
-        if (backTo && backTo !== name) {
-          setTimeout(() => {
-            if (currentAction !== name || !pet) return
-            const act = pet.actions[name]
-            const trans = act?.transitions
-            if (trans && Object.keys(trans).length > 0) {
-              // 转移链：按权重选下一个动作（Shimeji NextBehaviorList 思路，docs/11 §2.1）
-              const pool = Object.entries(trans).filter(([n, w]) => textures[n] && n !== name && w > 0)
-              if (pool.length > 0) {
-                const total = pool.reduce((s, [, w]) => s + w, 0)
-                let r = Math.random() * total
-                for (const [n, w] of pool) {
-                  r -= w
-                  if (r <= 0) {
-                    requestAction(n, 'transition')
-                    return
-                  }
-                }
-              }
-            }
-            if (currentAction === name) requestAction(backTo, 'init')
-          }, 4000)
-        }
         break
       }
     }
