@@ -12,6 +12,16 @@ This repository is a **full playbook**: pet trait collection → AI asset genera
 
 > 📦 **What's inside**: methodology (`docs/`) + pipeline scripts (`pipeline/`) + **a runnable client reference implementation** (`viewer/`, Electron + PixiJS — load your own pet pack and it runs; tested on macOS).
 
+---
+
+## Who is this for
+
+- **Pet owners**: want a "living" desktop twin of your own cat/dog — free & open source, **no programming needed**, but requires patience to walk the full pipeline (AI generation is not one-click; owner verification is irreplaceable)
+- **Developers**: want to learn/reuse a complete "real pet → runnable desktop pet" production pipeline (Python pipeline + Electron/PixiJS client reference implementation)
+- **Pet product folks**: researching "pet digital twin" product patterns, real data, and pitfalls
+
+**Not for**: just making a photo move (Doubao "Photo Alive" is enough); wanting ready-made pet asset libraries (VPet/Creative Workshop fits better). **This repo is not a one-click "upload photo → get pet" tool, and does not ship generic pet assets.**
+
 **📖 English speakers:** the docs are written in Chinese. The methodology is language-agnostic — the **pipeline scripts, JSON schemas, and viewer code are universal**. Start with the sections below; `docs/01` (data model), `docs/05` (pipeline), `docs/08` (contract) are the most valuable even without Chinese. Machine translation works well on these files.
 
 ---
@@ -138,6 +148,18 @@ petpet-playbook/
 3. **Every tool is replaceable**: Jimeng/rembg/PIL are not the only options
 4. **Mischief has boundaries**: visual mischief yes, real file operations no
 5. **Honest status labels**: never claim support for something untested
+
+---
+
+## Roadmap
+
+> Direction adjusts with real-user validation results (open source: no pie-in-the-sky, directions only, no timelines promised).
+
+**✅ Done**: asset pipeline (frame extraction / background removal / sprite sheets / validation); viewer reference implementation (8 actions + behavior transition chains + reminder system + diary + themes); 13 methodology docs; CI/Release automation; bilingual README; sample pet packs (redshao full loop / redshao-demo minimal playable)
+
+**🔨 In progress**: real-user validation (Windows install loop, word-of-mouth feedback) — results decide next direction
+
+**🔭 Planned** (adjusts to validation): pet identity & temperament model (behavior tendency modulation); memory & relationship system (events → habits → relationship); showcase & sharing capability
 
 ---
 

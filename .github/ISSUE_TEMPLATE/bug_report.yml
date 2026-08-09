@@ -1,0 +1,50 @@
+name: Bug report
+description: 桌宠/管线运行异常（英文模板，中文可用）
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢报告问题。请尽量提供信息——**宠物包配置、日志、复现步骤**是定位的关键。
+  - type: dropdown
+    id: area
+    attributes:
+      label: 哪个环节？
+      options:
+        - 查看器（viewer/ 桌宠客户端）
+        - 素材管线（pipeline/ 脚本）
+        - 文档/示例
+        - 其他
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统与版本
+      placeholder: 如 Windows 11 / macOS 14
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 客户端/脚本版本（tag 或 commit）
+      placeholder: 如 v1.1.0
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 1. 做了什么 2. 期望什么 3. 实际发生了什么
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志/截图
+      description: 查看器日志在 ~/.petpet/petpet.log（Windows: %USERPROFILE%\.petpet\petpet.log）；管线报错请贴终端输出
+      render: text
+  - type: textarea
+    id: petpack
+    attributes:
+      label: 宠物包信息（如涉及）
+      description: pet.json 的关键字段（动作数/精灵表尺寸等），或直接贴校验器输出（pipeline/validate_pet.py）

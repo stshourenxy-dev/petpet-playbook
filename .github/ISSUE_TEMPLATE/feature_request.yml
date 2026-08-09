@@ -1,0 +1,36 @@
+name: Feature request
+description: 功能/方向建议（中文可用）
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        欢迎建议。**注意**：本项目方向随真实用户验证调整，建议尽量附上"你实际遇到的场景"，比"应该加某功能"更有价值。
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 你的使用场景
+      description: 你在什么情况下遇到了什么限制？（描述场景比描述功能更有用）
+    validations:
+      required: true
+  - type: textarea
+    id: expectation
+    attributes:
+      label: 期望的行为/能力
+      description: 你希望它如何工作？
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: 对谁有用
+      description: 这个能力解决的是你的个案，还是普遍需求？（可留空）
+  - type: checkboxes
+    id: participate
+    attributes:
+      label: 参与意愿
+      options:
+        - label: 我可以提供宠物素材/测试反馈
+        - label: 我可以参与开发（PR）
+        - label: 我只是提建议
