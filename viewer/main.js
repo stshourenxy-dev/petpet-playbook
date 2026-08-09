@@ -7,6 +7,18 @@ const { pathToFileURL } = require('url')
 
 const PETS_ROOT = path.join(app.getPath('home'), '.petpet', 'pets')
 
+// Windows 排障：console 落盘到 ~/.petpet/petpet.log（Windows 无终端看不到主进程输出）
+const LOG_FILE = path.join(PETS_ROOT, '..', 'petpet.log')
+try {
+  fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true })
+  const logStream = fs.createWriteStream(LOG_FILE, { flags: 'a' })
+  ;['log', 'warn', 'error'].forEach(m => {
+    const orig = console[m].bind(console)
+    console[m] = (...args) => { orig(...args); logStream.write(`[${new Date().toISOString()}][${m}] ${args.map(String).join(' ')} \n`) }
+  })
+  console.log('[PetPet] 日志已重定向:', LOG_FILE)
+} catch (e) { /* 日志失败不阻塞启动 */ }
+
 // N-3：注册自定义协议（需在 app ready 前），渲染层用短 URL 流式读资产
 // petpet://<petId>/<relPath> → 文件系统，零 base64、零主进程内存驻留
 protocol.registerSchemesAsPrivileged([
@@ -72,7 +84,10 @@ function createWindow() {
   })
 
   mainWindow.setAlwaysOnTop(true, 'screen-saver')
-  mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  // macOS 专属 API；Windows 上调用可能异常 → 平台保护（2026-08-08 Win11 点图标无反应排查）
+  if (process.platform === 'darwin') {
+    mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  }
 
   // 窗口移动/关闭时保存位置
   mainWindow.on('moved', () => {
@@ -233,7 +248,21 @@ ipcMain.handle('pet:load', (_evt, petId) => {
     const safe = safePetId(petId)
     if (!safe) return { error: 'invalid pet id' }
     const p = path.join(PETS_ROOT, safe, 'pet.json')
-    return JSON.parse(fs.readFileSync(p, 'utf-8'))
+    const data = JSON.parse(fs.readFileSync(p, 'utf-8'))
+    // D-5: 数值上限校验（2026-08-09，外部审计指出恶意 pet.json 可构造资源炸弹；上限对齐 pipeline/validate_pet.py 纹理铁律）
+    const MAX_TEXTURE = 16384, MAX_FRAMES = 500, MAX_FPS = 120
+    if (data && data.actions && typeof data.actions === 'object') {
+      for (const [name, a] of Object.entries(data.actions)) {
+        if (!a || typeof a !== 'object') return { error: `action ${name}: 配置非法` }
+        const fw = a.frameWidth ?? a.cellWidth
+        const fh = a.frameHeight ?? a.cellHeight
+        if (fw != null && (!Number.isFinite(Number(fw)) || Number(fw) < 1 || Number(fw) > MAX_TEXTURE)) return { error: `action ${name}: frameWidth 超上限(≤${MAX_TEXTURE})` }
+        if (fh != null && (!Number.isFinite(Number(fh)) || Number(fh) < 1 || Number(fh) > MAX_TEXTURE)) return { error: `action ${name}: frameHeight 超上限(≤${MAX_TEXTURE})` }
+        if (a.frames != null && (!Number.isFinite(Number(a.frames)) || Number(a.frames) < 1 || Number(a.frames) > MAX_FRAMES)) return { error: `action ${name}: frames 超上限(≤${MAX_FRAMES})` }
+        if (a.fps != null && (!Number.isFinite(Number(a.fps)) || Number(a.fps) < 1 || Number(a.fps) > MAX_FPS)) return { error: `action ${name}: fps 超上限(≤${MAX_FPS})` }
+      }
+    }
+    return data
   } catch (e) {
     return { error: String(e) }
   }
@@ -265,15 +294,27 @@ const MIME = {
   '.gif': 'image/gif'
 }
 
+// D-6: 路径边界检查 + realpath 纵深（2026-08-09，外部审计指出符号链接可绕过字符串级检查）
+function isSafeUnderRoot(full) {
+  const rel = path.relative(PETS_ROOT, full)
+  if (rel.startsWith('..') || path.isAbsolute(rel)) return false
+  try {
+    const real = fs.realpathSync(full)
+    const relReal = path.relative(PETS_ROOT, real)
+    return !(relReal.startsWith('..') || path.isAbsolute(relReal))
+  } catch (e) {
+    return false // 不存在/无法解析 → 拒绝（等价 404）
+  }
+}
+
 ipcMain.handle('pet:file', (_evt, petId, relPath) => {
   // N-3：优先走 petpet:// 协议（渲染层用短 URL），此 IPC 保留为兼容 fallback
   try {
     const safe = safePetId(petId)
     if (!safe) return { error: 'invalid pet id' }
     const full = path.join(PETS_ROOT, safe, relPath)
-    // D-2: 用 path.relative 做路径边界检查（startsWith 前缀匹配可被 pets-evil/ 绕过）
-    const rel = path.relative(PETS_ROOT, full)
-    if (rel.startsWith('..') || path.isAbsolute(rel)) return { error: 'invalid path' }
+    // D-2/D-6: 路径边界检查 + realpath 纵深（防前缀绕过 pets-evil/ 与符号链接逃逸）
+    if (!isSafeUnderRoot(full)) return { error: 'invalid path' }
     const buf = fs.readFileSync(full)
     const ext = path.extname(full).toLowerCase()
     const mime = MIME[ext] || 'application/octet-stream'
@@ -292,8 +333,8 @@ function registerPetpetProtocol() {
       const relPath = decodeURIComponent(u.pathname).replace(/^\//, '')
       if (!safePetId(petId)) return new Response(null, { status: 403 })
       const full = path.join(PETS_ROOT, petId, relPath)
-      const rel = path.relative(PETS_ROOT, full)
-      if (rel.startsWith('..') || path.isAbsolute(rel)) return new Response(null, { status: 403 })
+      // D-2/D-6: 路径边界检查 + realpath 纵深
+      if (!isSafeUnderRoot(full)) return new Response(null, { status: 403 })
       return net.fetch(pathToFileURL(full).toString())
     } catch (e) {
       return new Response(null, { status: 404 })
