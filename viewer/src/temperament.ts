@@ -1,7 +1,7 @@
 // V2-A temperament 调制器（2026-08-09）
 // 设计：effectiveWeight = baseWeight × temperamentFactor
 // 克制原则：调制幅度 ≤±30%（钳制 0.7-1.3）；中性/缺省 temperament = 原行为（向后兼容）
-// 参考：DeepSeek/OpenAI 双评估共识——temperament=动物行为倾向，非人类人格
+// 设计依据：temperament 指动物行为倾向，非人类人格
 
 export interface Temperament {
   activity?: number      // 活跃：高 → run 增多

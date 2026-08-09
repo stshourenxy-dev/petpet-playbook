@@ -89,7 +89,7 @@ class TestSelectFrames:
             shutil.rmtree(out, ignore_errors=True)
 
     def test_fewer_frames_than_target(self):
-        # 帧数不足 → 全返回，不崩（WorkBuddy 边界 #1）
+        # 边界 #1：帧数不足时全量返回，不崩溃
         d = make_frames(10)
         try:
             assert len(select_frames(d, 12)) == 10

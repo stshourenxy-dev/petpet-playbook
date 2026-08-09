@@ -42,7 +42,7 @@ describe('state-priority 仲裁层', () => {
   })
 
   // ---- P0-1 回归：随机动作播完回 idle 必须放行 ----
-  // WorkBuddy 审查发现：回 idle 此前走 random 源，被 'currentAction === idle'
+  // 审查发现：回 idle 此前走 random 源，被 'currentAction === idle' 误拦截
   // 守卫拒绝（此时 currentAction 是刚播的随机动作）→ 宠物永久停在随机动作、
   // 随机行为永久停摆。修复 = 回 idle 改走 init 源（有 currentAction === name
   // 前置守卫防误打断）。本用例锁死该集成链路：
