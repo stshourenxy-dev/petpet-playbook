@@ -315,9 +315,12 @@ ipcMain.handle('pet:load', (_evt, petId) => {
 
 // 渲染进程加载宠物后通知主进程（用于托盘动作菜单）
 ipcMain.on('pet:loaded', (_evt, petId) => {
-  currentPetId = petId
+  // D-1 对齐：IPC 入口统一 safePetId 校验（此前 pet:loaded 漏网）
+  const safe = safePetId(petId)
+  if (!safe) return
+  currentPetId = safe
   try {
-    const p = path.join(PETS_ROOT, petId, 'pet.json')
+    const p = path.join(PETS_ROOT, safe, 'pet.json')
     const parsed = JSON.parse(fs.readFileSync(p, 'utf-8'))
     currentPetActions = parsed.actions
     currentTheme = parsed.theme || 'bro'

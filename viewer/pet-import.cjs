@@ -97,6 +97,52 @@ function unzipTo(zipPath, destDir) {
   })
 }
 
+// ── 枚举 zip 条目（解压前安全检查用）────────────────────────────────────
+function listZipEntries(zipPath) {
+  return new Promise((resolve, reject) => {
+    const isWin = process.platform === 'win32'
+    const tool = isWin ? 'tar' : 'unzip'
+    const args = isWin ? ['-tf', zipPath] : ['-Z1', zipPath]
+    execFile(tool, args, { timeout: 30000 }, (err, stdout) => {
+      if (err) reject(new Error(`读取压缩包条目失败（${tool}）：${err.message}`))
+      else resolve(stdout.split(/\r?\n/).filter(Boolean))
+    })
+  })
+}
+
+// ── 条目安全检查（防 zip slip：绝对路径 / ../ 段 / Windows 盘符）────────
+function checkZipEntries(entries) {
+  const bad = entries.filter((e) => {
+    if (!e) return false
+    const norm = e.replace(/\\/g, '/')
+    if (path.isAbsolute(norm)) return true
+    if (/^[a-zA-Z]:/.test(norm)) return true // Windows drive letter
+    return norm.split('/').includes('..')
+  })
+  return bad
+}
+
+// ── 解压后兜底：所有落盘文件的真实路径必须在 tmp 内 ──────────────────────
+// 防符号链接/条目检查绕过（realpath 纵深，对齐 main.js D-6 思路）
+function assertNoEscape(root) {
+  const realRoot = fs.realpathSync(root)
+  const offenders = []
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, entry.name)
+      if (entry.isSymbolicLink()) { offenders.push(p); continue }
+      if (entry.isDirectory()) walk(p)
+      else {
+        let real
+        try { real = fs.realpathSync(p) } catch { real = null }
+        if (!real || !real.startsWith(realRoot + path.sep)) offenders.push(p)
+      }
+    }
+  }
+  walk(root)
+  return offenders
+}
+
 // ── 在解压产物中定位宠物包根目录 ────────────────────────────────────────
 // 规则：顶层有 pet.json → 顶层即包根；否则在单层子目录中找 pet.json
 function locatePetRoot(dirPath) {
@@ -143,7 +189,18 @@ function importPetDir(srcDir, petsRoot) {
 async function importPetZip(zipPath, petsRoot) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'petpet-import-'))
   try {
+    // D-7: zip slip 防护——解压前枚举条目拦截绝对路径/../段；解压后 realpath 兜底
+    const entries = await listZipEntries(zipPath)
+    const bad = checkZipEntries(entries)
+    if (bad.length > 0) {
+      return { ok: false, error: `压缩包包含不安全路径条目，已拒绝（zip slip）：${bad.slice(0, 3).join(', ')}${bad.length > 3 ? ' …' : ''}` }
+    }
     await unzipTo(zipPath, tmp)
+    const escaped = assertNoEscape(tmp)
+    if (escaped.length > 0) {
+      for (const p of escaped) { try { fs.rmSync(p, { recursive: true, force: true }) } catch { /* 尽力清理 */ } }
+      return { ok: false, error: '压缩包解压越界（符号链接或越界路径），已拦截并清理' }
+    }
     const root = locatePetRoot(tmp)
     if (!root) {
       return { ok: false, error: '压缩包内找不到 pet.json（请确认是宠物包 zip）' }
@@ -164,4 +221,4 @@ async function importPetZip(zipPath, petsRoot) {
   }
 }
 
-module.exports = { validatePetDir, importPetDir, importPetZip, unzipTo, pngSize, locatePetRoot }
+module.exports = { validatePetDir, importPetDir, importPetZip, unzipTo, pngSize, locatePetRoot, listZipEntries, checkZipEntries, assertNoEscape }

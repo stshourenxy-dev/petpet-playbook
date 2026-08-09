@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { validatePetDir, locatePetRoot, importPetDir, pngSize } from '../pet-import.cjs'
+import { validatePetDir, locatePetRoot, importPetDir, pngSize, checkZipEntries, assertNoEscape } from '../pet-import.cjs'
 
 // 构造最小合法 PNG（前 24 字节含 IHDR 宽高即可，pngSize 只读头部）
 function fakePng(width: number, height: number) {
@@ -72,6 +72,35 @@ describe('validatePetDir', () => {
     pet.actions.idle.frames = 24  // 24×1024=24576 > 16384
     fs.writeFileSync(petPath, JSON.stringify(pet))
     expect(validatePetDir(dir).ok).toBe(false)
+  })
+})
+
+describe('checkZipEntries (zip slip)', () => {
+  it('正常条目通过', () => {
+    expect(checkZipEntries(['pet.json', 'idle/idle.png', 'sleep/sleep.webp'])).toEqual([])
+  })
+  it('拦截 ../ 路径', () => {
+    const bad = checkZipEntries(['pet.json', '../../evil.sh'])
+    expect(bad.length).toBe(1)
+  })
+  it('拦截绝对路径与 Windows 盘符', () => {
+    expect(checkZipEntries(['/etc/passwd', 'C:\\evil.exe']).length).toBe(2)
+  })
+  it('拦截反斜杠伪装的 ..', () => {
+    expect(checkZipEntries(['..\\..\\evil.exe']).length).toBe(1)
+  })
+})
+
+describe('assertNoEscape', () => {
+  it('正常目录全部文件通过', () => {
+    expect(assertNoEscape(makePack())).toEqual([])
+  })
+  it('检测符号链接逃逸', () => {
+    const dir = makePack()
+    fs.symlinkSync('/etc', path.join(dir, 'evil-link'))
+    const off = assertNoEscape(dir)
+    expect(off.length).toBe(1)
+    expect(off[0]).toContain('evil-link')
   })
 })
 
