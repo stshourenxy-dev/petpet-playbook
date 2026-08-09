@@ -1,9 +1,10 @@
 // PetPet 桌宠查看器 - 主进程
 // Electron 主进程：透明窗口、托盘、IPC 文件读取
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, protocol, net } = require('electron')
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, protocol, net, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
+const { importPetDir, importPetZip } = require('./pet-import.cjs')
 
 const PETS_ROOT = path.join(app.getPath('home'), '.petpet', 'pets')
 
@@ -178,6 +179,10 @@ function rebuildTrayMenu() {
     template.push({ label: '🎬 切换动作', submenu: actionItems })
   }
 
+  // 导入宠物包（功能来源：用户反馈——宠物主人安装素材包困难，需手动复制目录）
+  template.push({ type: 'separator' })
+  template.push({ label: '📦 导入宠物包', click: () => handleImportPet() })
+
   // 方案B：功能入口兜底（右键手势不可用时从托盘调出）
   template.push({ type: 'separator' })
   template.push({ label: `📖 ${petName}日记`, click: () => openDiaryWindow(currentPetId || pets[0] || 'redshao') })
@@ -187,6 +192,37 @@ function rebuildTrayMenu() {
   template.push({ label: '🚪 退出', click: () => app.quit() })
   console.log('[PetPet][诊断] 菜单动作子项数:', currentPetActions?Object.keys(currentPetActions).length:0)
   tray.setContextMenu(Menu.buildFromTemplate(template))
+}
+
+// ── 导入宠物包：选择目录或 .petpack/.zip → 校验 → 装入 ~/.petpet/pets/ ──
+// 功能来源：用户反馈——宠物主人安装素材包困难（需手动复制目录到
+// ~/.petpet/pets/，红苕爸爸实测暴露），故提供双击导入入口。
+async function handleImportPet() {
+  if (!mainWindow) return
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: '导入宠物包',
+    message: '选择宠物包目录，或 .petpack/.zip 压缩包（将校验后装入 ~/.petpet/pets/）',
+    properties: ['openFile', 'openDirectory'],
+    filters: [{ name: '宠物包', extensions: ['petpack', 'zip', 'pet'] }]
+  })
+  if (canceled || filePaths.length === 0) return
+  const selected = filePaths[0]
+  const isZip = /\.(petpack|zip|pet)$/i.test(selected)
+  const result = isZip
+    ? await importPetZip(selected, PETS_ROOT)
+    : importPetDir(selected, PETS_ROOT)
+
+  if (!result.ok) {
+    dialog.showErrorBox('导入失败', result.error || '未知错误')
+    return
+  }
+  rebuildTrayMenu()
+  send('pet:switch', result.id)  // 导入成功后自动切换到新宠物
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: '导入成功',
+    message: `「${result.name}」已装入桌面（${result.dest}）`
+  })
 }
 
 // 右键菜单：原生 macOS Menu.popup（自动毛玻璃/定位，替代 HTML 自绘）

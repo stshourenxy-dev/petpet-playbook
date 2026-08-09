@@ -1,0 +1,111 @@
+// pet-import 校验与导入逻辑测试（对应 viewer/pet-import.cjs）
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
+import { validatePetDir, locatePetRoot, importPetDir, pngSize } from '../pet-import.cjs'
+
+// 构造最小合法 PNG（前 24 字节含 IHDR 宽高即可，pngSize 只读头部）
+function fakePng(width: number, height: number) {
+  const buf = Buffer.alloc(24)
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(buf, 0)
+  buf.write('IHDR', 12, 'ascii')
+  buf.writeUInt32BE(width, 16)
+  buf.writeUInt32BE(height, 20)
+  return buf
+}
+
+let tmp: string
+beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'petpet-test-')) })
+afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }) })
+
+function makePack(id = 'testdog', opts: { width?: number } = {}) {
+  const dir = path.join(tmp, id)
+  fs.mkdirSync(path.join(dir, 'idle'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'pet.json'), JSON.stringify({
+    version: 3, id, name: '测试狗',
+    actions: {
+      idle: { file: 'idle/idle.png', frames: 12, frameWidth: 1024, frameHeight: 576 }
+    }
+  }))
+  fs.writeFileSync(path.join(dir, 'idle', 'idle.png'), fakePng(opts.width || 12288, 576))
+  return dir
+}
+
+describe('pngSize', () => {
+  it('解析 PNG 头宽高', () => {
+    expect(pngSize(fakePng(12288, 576))).toEqual({ width: 12288, height: 576 })
+  })
+  it('非 PNG 返回 null', () => {
+    expect(pngSize(Buffer.from('not a png at all...'))).toBeNull()
+  })
+})
+
+describe('validatePetDir', () => {
+  it('合法宠物包通过', () => {
+    const r = validatePetDir(makePack())
+    expect(r.ok).toBe(true)
+    expect(r.id).toBe('testdog')
+  })
+
+  it('缺 pet.json 报错', () => {
+    const dir = path.join(tmp, 'empty')
+    fs.mkdirSync(dir)
+    expect(validatePetDir(dir).ok).toBe(false)
+  })
+
+  it('id 不合法报错（大写/空格）', () => {
+    const dir = makePack('Bad Dog')
+    expect(validatePetDir(dir).ok).toBe(false)
+  })
+
+  it('精灵表文件缺失报错', () => {
+    const dir = makePack()
+    fs.rmSync(path.join(dir, 'idle'), { recursive: true, force: true })
+    expect(validatePetDir(dir).ok).toBe(false)
+  })
+
+  it('帧宽×帧数超 16384 上限报错', () => {
+    const dir = makePack()
+    const petPath = path.join(dir, 'pet.json')
+    const pet = JSON.parse(fs.readFileSync(petPath, 'utf8'))
+    pet.actions.idle.frames = 24  // 24×1024=24576 > 16384
+    fs.writeFileSync(petPath, JSON.stringify(pet))
+    expect(validatePetDir(dir).ok).toBe(false)
+  })
+})
+
+describe('locatePetRoot', () => {
+  it('顶层 pet.json 直接命中', () => {
+    const dir = makePack()
+    expect(locatePetRoot(dir)).toBe(dir)
+  })
+  it('单层子目录中的宠物包可被定位', () => {
+    const dir = makePack()
+    const outer = path.join(tmp, 'outer')
+    fs.mkdirSync(outer)
+    fs.renameSync(dir, path.join(outer, 'testdog'))
+    expect(locatePetRoot(outer)).toBe(path.join(outer, 'testdog'))
+  })
+})
+
+describe('importPetDir', () => {
+  it('复制到 petsRoot/<id> 并跳过隐藏文件', () => {
+    const src = makePack()
+    fs.writeFileSync(path.join(src, '.DS_Store'), 'x')
+    const destRoot = path.join(tmp, 'pets')
+    const r = importPetDir(src, destRoot)
+    expect(r.ok).toBe(true)
+    expect(fs.existsSync(path.join(destRoot, 'testdog', 'pet.json'))).toBe(true)
+    expect(fs.existsSync(path.join(destRoot, 'testdog', '.DS_Store'))).toBe(false)
+  })
+  it('目标已存在时覆盖导入', () => {
+    const src = makePack()
+    const destRoot = path.join(tmp, 'pets')
+    importPetDir(src, destRoot)
+    fs.writeFileSync(path.join(destRoot, 'testdog', 'marker.txt'), 'old')
+    const r = importPetDir(src, destRoot)
+    expect(r.ok).toBe(true)
+    expect(fs.existsSync(path.join(destRoot, 'testdog', 'marker.txt'))).toBe(false)
+  })
+})
