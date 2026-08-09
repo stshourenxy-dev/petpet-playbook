@@ -87,7 +87,7 @@ npm run build        # 构建渲染层（dist/）
 npm start            # 构建后直接启动
 ```
 
-宠物包结构见 08-接口协议。**想立刻看到效果**：`examples/redshao-demo/` 是一个可直接运行的**最小示例宠物包**（抱熊待机 + 睡觉 + 伸懒腰三个动作，v3 契约含 `sleep→stretch` 行为转移链，压缩至 512px，~6MB）——复制到用户数据目录即可：
+宠物包结构见 08-接口协议。**想立刻看到效果**：`examples/redshao-demo/` 是一个可直接运行的**最小示例宠物包**（抱熊待机 + 睡觉 + 伸懒腰三个动作，v3 契约含 `sleep→stretch` 行为转移链，压缩至 512px，~4MB）——复制到用户数据目录即可：
 
 ```bash
 # macOS
@@ -183,9 +183,10 @@ docs/
 
 | 内容 | 说明 |
 |------|------|
-| pet.json | 宠物包定义（idle 抱熊 + sleep 两动作，512px 压缩版） |
-| knead/knead_sheet.png | 抱熊待机精灵表（12 帧，~2.9MB） |
-| sleep/sleep_sprite.png | 睡觉精灵表（12 帧，~1.5MB） |
+| pet.json | 宠物包定义（idle 抱熊 + sleep 睡觉 + stretch 伸懒腰三动作，512px 压缩版） |
+| knead/knead_sheet.webp | 抱熊待机精灵表（12 帧，~1.8MB） |
+| sleep/sleep_sprite.webp | 睡觉精灵表（12 帧，~1.0MB） |
+| stretch/stretch_sprite.webp | 伸懒腰精灵表（12 帧，~1.0MB） |
 
 > 复制到 `~/.petpet/pets/redshao-demo/` 即可运行（用法见上方「想立刻看到效果」）。
 > 这是为了让你**先看到效果再决定要不要投入**——完整 8 动作需按管线自生成。
