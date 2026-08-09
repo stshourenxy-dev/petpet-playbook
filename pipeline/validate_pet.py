@@ -73,6 +73,39 @@ def validate_pet_json(data: dict[str, Any], base_dir: str) -> int:
         errors += 1
         err("bubbles 应为非空字符串数组（气泡文案池）")
 
+    # V2-A: identity/temperament 校验（2026-08-09，可选字段，缺省=中性）
+    if "identity" in data:
+        ident = data["identity"]
+        if not isinstance(ident, dict):
+            errors += 1
+            err("identity 应为对象（species/appearance/habits）")
+        else:
+            if "species" in ident and (not isinstance(ident["species"], str) or not ident["species"].strip()):
+                errors += 1
+                err("identity.species 应为非空字符串")
+            if "appearance" in ident and not isinstance(ident["appearance"], dict):
+                errors += 1
+                err("identity.appearance 应为对象")
+            if "habits" in ident and (
+                not isinstance(ident["habits"], dict)
+                or not all(isinstance(v, bool) for v in ident["habits"].values())
+            ):
+                errors += 1
+                err("identity.habits 应为布尔值对象（如 {likes_ball: true}）")
+
+    if "temperament" in data:
+        temp = data["temperament"]
+        if not isinstance(temp, dict):
+            errors += 1
+            err("temperament 应为对象（activity/clinginess/curiosity/independence）")
+        else:
+            for key in ("activity", "clinginess", "curiosity", "independence"):
+                if key in temp:
+                    v = temp[key]
+                    if not isinstance(v, (int, float)) or isinstance(v, bool) or not (0 <= v <= 1):
+                        errors += 1
+                        err(f"temperament.{key} 应为 0-1 数值，实际 {v!r}")
+
     actions = data.get("actions")
     if not isinstance(actions, dict) or not actions:
         errors += 1

@@ -5,6 +5,7 @@ import 'pixi.js/unsafe-eval'
 import * as PIXI from 'pixi.js'
 import { parseReminder } from './reminder'
 import { shouldPlay, isOneshot } from './state-priority'
+import { effectiveWeight } from './temperament' // V2-A: 气质调制器（2026-08-09）
 
 // ================= 类型 =================
 interface PetActionSpec {
@@ -30,6 +31,18 @@ interface PetJson {
   cellHeight: number
   error?: string
   actions: Record<string, PetActionSpec>
+  // V2-A: 身份+气质（2026-08-09，可选，缺省=中性，兼容旧包）
+  identity?: {
+    species?: string
+    appearance?: Record<string, string>
+    habits?: Record<string, boolean>
+  }
+  temperament?: {
+    activity?: number
+    clinginess?: number
+    curiosity?: number
+    independence?: number
+  }
 }
 
 declare global {
@@ -568,10 +581,10 @@ function startRandomBehavior() {
     })
     if (candidates.length === 0) return
 
-    const total = candidates.reduce((s, [, a]) => s + (a.weight ?? 0), 0)
+    const total = candidates.reduce((s, [n, a]) => s + effectiveWeight(n, a.weight ?? 0, pet?.temperament), 0)
     let r = Math.random() * total
     for (const [name, act] of candidates) {
-      r -= (act.weight ?? 0)
+      r -= effectiveWeight(name, act.weight ?? 0, pet?.temperament)
       if (r <= 0) {
         requestAction(name, 'random')
         // 播完后按转移链（transitions）或回 idle——带守卫：仅当未被更高优先级动作打断时
