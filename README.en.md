@@ -4,6 +4,10 @@
 ![Release](https://img.shields.io/github/v/release/stshourenxy-dev/petpet-playbook)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-3e7c5a)
 
+![Redshao on the desktop](assets/demo-preview.jpg)
+
+*Redshao, a border collie turned desktop pet. ▶️ [See the 5-action demo GIF (~1MB)](assets/demo.gif): sleep → cuddle-bear idle → wiggle → run → stretch. Assets made by AI generation + rembg pipeline; full flow in this repo.*
+
 > Not "yet another desktop pet app" — it's a **complete methodology for turning your real pet into a living desktop companion**: AI-generated likeness, its own actions, its own personality, sitting on your desktop while you work.
 
 This repository is a **full playbook**: pet trait collection → AI asset generation → sprite-sheet pipeline → desktop pet implementation, with real decisions, real data, and real pitfalls recorded along the way.
@@ -93,11 +97,7 @@ mkdir -p ~/.petpet/pets && cp -r examples/redshao-demo ~/.petpet/pets/redshao-de
 
 ---
 
-![Redshao on the desktop](assets/demo-preview.jpg)
-
-*Redshao, a border collie turned desktop pet. ▶️ [See the 5-action demo GIF (~1MB)](assets/demo.gif): sleep → cuddle-bear idle → wiggle → run → stretch. Assets made by AI generation + rembg pipeline; full flow in this repo.*
-
----
+## Quick start (pipeline)
 
 ## The Full Flow (one picture)
 
