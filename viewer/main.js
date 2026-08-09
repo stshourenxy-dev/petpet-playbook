@@ -7,6 +7,15 @@ const { pathToFileURL } = require('url')
 
 const PETS_ROOT = path.join(app.getPath('home'), '.petpet', 'pets')
 
+// P0（2026-08-09 红苕爸爸 Windows 实测暴露）：启动即自动创建宠物目录，
+// 否则首次运行前 Win+R 打开 %USERPROFILE%\.petpet\pets 会报"找不到"，且素材无处可放
+// （此前只有 LOG_FILE 的 dirname 即 ~/.petpet/ 被创建，pets/ 缺失）
+try {
+  fs.mkdirSync(PETS_ROOT, { recursive: true })
+} catch (e) {
+  console.error('创建宠物目录失败:', e)
+}
+
 // Windows 排障：console 落盘到 ~/.petpet/petpet.log（Windows 无终端看不到主进程输出）
 const LOG_FILE = path.join(PETS_ROOT, '..', 'petpet.log')
 try {

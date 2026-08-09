@@ -254,7 +254,11 @@ async function init() {
     console.error('listPets 失败', err)
   }
   if (pets.length === 0) {
-    showFatal('没有找到宠物包。请创建 ~/.petpet/pets/<宠物名>/pet.json（格式见 docs/08-接口协议.md）')
+    // P0（2026-08-09）：Windows 用户看不懂 ~ 路径（老坑复发）——按平台显示实际路径
+    const petsPath = navigator.userAgent.includes('Windows')
+      ? '%USERPROFILE%\\.petpet\\pets'
+      : '~/.petpet/pets'
+    showFatal(`没有找到宠物包。请创建 ${petsPath}/<宠物名>/pet.json（格式见 docs/08-接口协议.md）`)
     return
   }
   petId = pets[0]
