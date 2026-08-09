@@ -4,7 +4,7 @@
 import 'pixi.js/unsafe-eval'
 import * as PIXI from 'pixi.js'
 import { parseReminder } from './reminder'
-import { shouldPlay, isOneshot } from './state-priority'
+import { shouldPlay } from './state-priority'
 import { effectiveWeight } from './temperament' // V2-A: 气质调制器（2026-08-09）
 
 // ================= 类型 =================
@@ -20,6 +20,8 @@ interface PetActionSpec {
   frameHeight?: number
   scale?: number
   transitions?: Record<string, number>
+  label?: string // v3：菜单显示名（优先于内置映射）
+  diary?: { mood: string; text: string } // v3：动作→日记心情文案（优先于内置映射）
 }
 
 interface PetJson {
@@ -27,6 +29,7 @@ interface PetJson {
   id: string
   name: string
   theme?: string
+  bubbles?: string[] // v3：互动气泡文案池（优先于内置 BUBBLE_TEXTS）
   cellWidth: number
   cellHeight: number
   error?: string
@@ -364,7 +367,7 @@ function playAction(name: string, source: 'menu' | 'reminder' | 'random' | 'init
   // P1-7: 随机行为不写日记（12s 一条会把 100 条日记 20 分钟冲光）——只有用户主动/提醒才记录
   if (source !== 'random' && name !== 'idle' && name !== currentAction) logActionActivity(name)
   // 动作切换 → 通知主进程同步日记「当前状态」（idle 也用固定文案）
-  const actT = ACTIVITY_TEXTS[name]
+  const actT = resolveActionDiary(name)
   window.petAPI.notifyAction(actT
     ? { mood: actT.mood, text: actT.text.replace('{name}', petDisplayName()) }
     : { mood: '待机', text: `${petDisplayName()}安安静静地待着，等你来摸～` })
@@ -453,7 +456,8 @@ function resetZoom() {
 // ================= 气泡 =================
 function showBubbleText(text?: string) {
   const bubble = document.getElementById('bubble')!
-  bubble.textContent = text || BUBBLE_TEXTS[Math.floor(Math.random() * BUBBLE_TEXTS.length)]
+  const pool = bubblePool()
+  bubble.textContent = text || pool[Math.floor(Math.random() * pool.length)]
   bubble.classList.remove('hidden')
   bubble.style.left = '50%'
   bubble.style.top = '8px'
@@ -478,12 +482,24 @@ const ACTIVITY_TEXTS: Record<string, { mood: string; text: string }> = {
   stretch: { mood: '舒坦', text: '{name}伸了个大大的懒腰，爪子张得开花。' }
 }
 
+// ================= 文案数据优先（v3 数据下沉） =================
+// pet.json 的 bubbles / diary / label 优先，代码常量仅作兜底（docs/08 §2.2）
+function bubblePool(): string[] {
+  return pet?.bubbles && pet.bubbles.length > 0 ? pet.bubbles : BUBBLE_TEXTS
+}
+
+function resolveActionDiary(name: string): { mood: string; text: string } | undefined {
+  const d = pet?.actions?.[name]?.diary
+  if (d && d.mood && d.text) return d
+  return ACTIVITY_TEXTS[name]
+}
+
 function petDisplayName(): string {
   return pet?.name || '宠物'
 }
 
 function logActionActivity(name: string) {
-  const t = ACTIVITY_TEXTS[name]
+  const t = resolveActionDiary(name)
   if (!t) return
   window.petAPI.appendActivity({ petId, mood: t.mood, text: t.text.replace('{name}', petDisplayName()) })
 }

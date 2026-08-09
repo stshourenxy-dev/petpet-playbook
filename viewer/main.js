@@ -41,10 +41,15 @@ let currentPetId = null
 let currentPetActions = null
 let currentPetName = '宠物'  // P0-3：菜单文案不再硬编码红苕
 
-// 动作名 → 中文标签
+// 动作名 → 中文标签（内置兜底映射，pet.json 的 label 优先，见 actionMenuLabel）
 const ACTION_LABELS = {
   idle: '待机', sleep: '睡觉', sniff: '嗅闻', wiggle: '撒娇',
   run: '奔跑', belly: '露肚躺', poop: '拉粑粑', stretch: '伸懒腰'
+}
+
+// 动作菜单文案：pet.json 的 label 优先，其次内置映射，最后原始 key（v3 数据下沉）
+function actionMenuLabel(name, act) {
+  return (act && act.label) || ACTION_LABELS[name] || name
 }
 
 // ---------- 窗口 ----------
@@ -172,7 +177,7 @@ function rebuildTrayMenu() {
   // 动作子菜单（从 pet.json 加载，恢复旧版功能）
   if (currentPetActions && Object.keys(currentPetActions).length > 0) {
     const actionItems = Object.keys(currentPetActions).map(name => ({
-      label: ACTION_LABELS[name] || name,
+      label: actionMenuLabel(name, currentPetActions?.[name]),
       click: () => send('pet:action', name)
     }))
     template.push({ type: 'separator' })
@@ -237,7 +242,7 @@ ipcMain.handle('menu:showContext', (_evt, x, y) => {
   ]
   if (currentPetActions && Object.keys(currentPetActions).length > 0) {
     Object.keys(currentPetActions).forEach(name => {
-      template.push({ label: ACTION_LABELS[name] || name, click: () => send('pet:action', name) })
+      template.push({ label: actionMenuLabel(name, currentPetActions?.[name]), click: () => send('pet:action', name) })
     })
   }
   template.push({ type: 'separator' })
