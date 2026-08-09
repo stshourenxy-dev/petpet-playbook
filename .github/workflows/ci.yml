@@ -34,6 +34,8 @@ jobs:
         run: pytest tests/test_pipeline.py -v
       - name: 宠物包校验（demo v3）
         run: python pipeline/validate_pet.py examples/redshao-demo/
+      - name: schema↔docs 漂移检查（docs/08 字段表须与 schema 一致）
+        run: python pipeline/check_docs_sync.py
 
   viewer-build:
     name: 客户端构建

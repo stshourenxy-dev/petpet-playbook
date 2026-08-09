@@ -5,7 +5,12 @@
   "description": "运行时宠物包配置（docs/08-接口协议.md §2）。v3：新增 bubbles / diary / label 文案下沉字段，启用 transitions 转移链。",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "id", "name", "actions"],
+  "required": [
+    "version",
+    "id",
+    "name",
+    "actions"
+  ],
   "properties": {
     "version": {
       "type": "number",
@@ -28,7 +33,11 @@
     },
     "theme": {
       "type": "string",
-      "enum": ["bro", "sis", "orange"],
+      "enum": [
+        "bro",
+        "sis",
+        "orange"
+      ],
       "description": "主题"
     },
     "cellWidth": {
@@ -43,8 +52,63 @@
     },
     "bubbles": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 },
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
       "description": "互动气泡文案池（替代代码硬编码 BUBBLE_TEXTS；未写则用内置默认）"
+    },
+    "identity": {
+      "type": "object",
+      "description": "V2-A 身份事实：描述\"它是谁\"（species/appearance/habits），供未来行为映射与展示；缺省兼容旧包",
+      "properties": {
+        "species": {
+          "type": "string",
+          "description": "物种（如边牧）"
+        },
+        "appearance": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "外观特征键值（如 毛色: 棕白）"
+        },
+        "habits": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "description": "习惯布尔键值（如 likes_ball: true）"
+        }
+      },
+      "additionalProperties": false
+    },
+    "temperament": {
+      "type": "object",
+      "description": "V2-A 气质倾向：均为 0-1，调制随机行为权重（幅度 ±30%，钳制 0.7-1.3）；缺省/中性=原行为",
+      "properties": {
+        "activity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "clinginess": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "curiosity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "independence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "additionalProperties": false
     },
     "actions": {
       "type": "object",
@@ -62,7 +126,11 @@
     "action": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["frames", "frameWidth", "frameHeight"],
+      "required": [
+        "frames",
+        "frameWidth",
+        "frameHeight"
+      ],
       "properties": {
         "file": {
           "type": "string",
@@ -136,7 +204,10 @@
           "type": "object",
           "description": "动作→日记心情文案（替代代码硬编码 ACTIVITY_TEXTS）",
           "additionalProperties": false,
-          "required": ["mood", "text"],
+          "required": [
+            "mood",
+            "text"
+          ],
           "properties": {
             "mood": {
               "type": "string",
