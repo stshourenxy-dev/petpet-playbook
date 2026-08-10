@@ -33,7 +33,29 @@ jobs:
       - name: 冒烟测试
         run: python tests/smoke_test.py
       - name: 单元测试（边界情况）
-        run: pytest tests/test_pipeline.py -v
+        run: pytest tests/test_pipeline.py -v 2>&1 | tee /tmp/pytest.log; exit ${PIPESTATUS[0]}
+      - name: 失败上报（debug——把 pytest 输出打进 annotation 供 API 读取）
+        if: failure()
+        shell: bash
+        run: |
+          python3 << 'PYEOF'
+          import re
+          try:
+              lines = open('/tmp/pytest.log').read().splitlines()
+          except FileNotFoundError:
+              lines = ['(无日志文件)']
+          printed = False
+          for i, l in enumerate(lines):
+              if re.search(r'(FAILED|AssertionError|Error|Exception|Traceback|^E\s+)', l):
+                  for c in lines[max(0,i-3):i+4]:
+                      print('::error::' + c[:240])
+                  printed = True
+                  break
+          if not printed:
+              print('::error::---- 日志尾部 ----')
+              for l in lines[-30:]:
+                  print('::error::' + l[:240])
+          PYEOF
       - name: 宠物包校验（demo v3）
         run: python pipeline/validate_pet.py examples/redshao-demo/
       - name: schema↔docs 漂移检查（docs/08 字段表须与 schema 一致）
