@@ -44,15 +44,16 @@ jobs:
               lines = open('/tmp/pytest.log').read().splitlines()
           except FileNotFoundError:
               lines = ['(无日志文件)']
-          printed = False
-          for i, l in enumerate(lines):
-              if re.search(r'(FAILED|AssertionError|Error|Exception|Traceback|^E\s+)', l):
-                  for c in lines[max(0,i-3):i+4]:
-                      print('::error::' + c[:240])
-                  printed = True
-                  break
-          if not printed:
-              print('::error::---- 日志尾部 ----')
+          # 打印所有 E 行（pytest traceback 详情）
+          e_lines = [i for i, l in enumerate(lines) if l.startswith('E ')]
+          if e_lines:
+              for i in e_lines[:40]:
+                  # 带上 E 行之前的一行（断言位置）
+                  if i-1 >= 0:
+                      print('::error::' + lines[i-1][:240])
+                  print('::error::' + lines[i][:240])
+          else:
+              print('::error::---- 无 E 行，日志尾部 ----')
               for l in lines[-30:]:
                   print('::error::' + l[:240])
           PYEOF
