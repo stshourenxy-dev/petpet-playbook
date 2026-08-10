@@ -14,8 +14,8 @@
   "properties": {
     "version": {
       "type": "number",
-      "const": 3,
-      "description": "配置版本（当前 3）"
+      "enum": [2, 3],
+      "description": "配置版本（3 为当前契约；2 为兼容旧包）"
     },
     "id": {
       "type": "string",

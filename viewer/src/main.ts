@@ -299,8 +299,8 @@ async function loadPet(id: string) {
   if (app.canvas) {
     app.canvas.setAttribute('aria-label', `${pet.name}（桌面宠物）`)
   }
-  // 主题皮肤：bro=弟弟(蓝绿) / sis=妹妹(暖粉)，跟随 pet.json 的 theme 字段
-  document.body.dataset.theme = pet.theme || 'bro'
+  // theme 为契约元数据字段（schema/docs 保留，供未来换肤）；当前版本不参与渲染——
+  // 不设置幽灵 data-theme（无 CSS 消费，设置只会误导审计为"功能存在"）
   // 通知主进程当前宠物（托盘动作菜单用）
   window.petAPI.notifyPetLoaded(id)
 

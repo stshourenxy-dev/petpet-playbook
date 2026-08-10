@@ -134,8 +134,9 @@ function validatePetDir(dirPath) {
     return { ok: false, error: `pet.json 解析失败：${e.message}` }
   }
 
-  if (typeof pet.version !== 'number' || pet.version < 1) {
-    return { ok: false, error: 'pet.json 缺少合法 version（应为 1/2/3）' }
+  // AI 工具审计 E：version 口径统一——schema enum [2,3] / validate_pet.py (2,3) / 此处收紧（此前 <1 导致 99 也过）
+  if (typeof pet.version !== 'number' || ![2, 3].includes(pet.version)) {
+    return { ok: false, error: `pet.json version 不合法（应为 2 或 3，3 为当前契约）：${pet.version ?? '(空)'}` }
   }
   if (!pet.id || !ID_RE.test(pet.id)) {
     return { ok: false, error: `pet.json id 不合法（应为小写字母/数字/_-）：${pet.id || '(空)'}` }

@@ -261,3 +261,24 @@ describe('AI 工具审计 V-01/V-02 加固', () => {
     expect(typeof listZipEntries).toBe('function')
   })
 })
+
+describe('AI 工具审计 E：契约 version 口径统一', () => {
+  it('version=99 应被拒（此前 <1 校验放行任意大版本）', () => {
+    const dir = makePack('ver-99')
+    const p = path.join(dir, 'pet.json')
+    const pet = JSON.parse(fs.readFileSync(p, 'utf8'))
+    pet.version = 99
+    fs.writeFileSync(p, JSON.stringify(pet))
+    const r = validatePetDir(dir)
+    expect(r.ok).toBe(false)
+    expect(r.error).toContain('version')
+  })
+  it('version=2（兼容旧包）应通过', () => {
+    const dir = makePack('ver-2')
+    const p = path.join(dir, 'pet.json')
+    const pet = JSON.parse(fs.readFileSync(p, 'utf8'))
+    pet.version = 2
+    fs.writeFileSync(p, JSON.stringify(pet))
+    expect(validatePetDir(dir).ok).toBe(true)
+  })
+})

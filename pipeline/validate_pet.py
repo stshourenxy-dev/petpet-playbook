@@ -323,21 +323,21 @@ def validate_profile(data: dict[str, Any]) -> int:
         errors += 1
         err(f"画像: name 必须匹配 {PET_ID_RE.pattern}（= 宠物包目录名）")
 
-    if "gender" in data and data["gender"] not in VALID_GENDERS:
+    if "gender" not in data or data["gender"] not in VALID_GENDERS:
         errors += 1
-        err(f"画像: gender 应为 {VALID_GENDERS} 之一，实际 {data.get('gender')!r}")
+        err(f"画像: gender 必填，应为 {VALID_GENDERS} 之一，实际 {data.get('gender')!r}")
 
-    if "ageStage" in data and data["ageStage"] not in VALID_AGE_STAGES:
+    if "ageStage" not in data or data["ageStage"] not in VALID_AGE_STAGES:
         errors += 1
-        err(f"画像: ageStage 应为 {VALID_AGE_STAGES} 之一，实际 {data.get('ageStage')!r}")
+        err(f"画像: ageStage 必填，应为 {VALID_AGE_STAGES} 之一，实际 {data.get('ageStage')!r}")
 
-    if "devices" in data and data["devices"] not in VALID_DEVICES:
+    if "devices" not in data or data["devices"] not in VALID_DEVICES:
         errors += 1
-        err(f"画像: devices 应为 {VALID_DEVICES} 之一，实际 {data.get('devices')!r}")
+        err(f"画像: devices 必填，应为 {VALID_DEVICES} 之一，实际 {data.get('devices')!r}")
 
-    if "build" in data and data["build"] not in VALID_BUILDS:
+    if "build" not in data or data["build"] not in VALID_BUILDS:
         errors += 1
-        err(f"画像: build 应为 {VALID_BUILDS} 之一，实际 {data.get('build')!r}")
+        err(f"画像: build 必填，应为 {VALID_BUILDS} 之一，实际 {data.get('build')!r}")
 
     for field in ("lengthCm", "heightCm", "legCm", "widthCm"):
         v = data.get(field)

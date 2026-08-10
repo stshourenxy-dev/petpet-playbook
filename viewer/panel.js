@@ -28,7 +28,7 @@ function renderStatus(info) {
 
 document.getElementById('close').addEventListener('click', () => window.panelAPI.close())
 
-window.panelAPI.onDiaryData(({ entries, theme, status, petName }) => {
+window.panelAPI.onDiaryData(({ entries, status, petName }) => {
   const name = petName || '宠物'
   document.title = name + '日记'
   document.getElementById('title').textContent = '📖 ' + name + '日记'

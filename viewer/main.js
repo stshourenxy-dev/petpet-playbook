@@ -335,11 +335,9 @@ ipcMain.on('pet:loaded', (_evt, petId) => {
     const p = path.join(PETS_ROOT, safe, 'pet.json')
     const parsed = JSON.parse(fs.readFileSync(p, 'utf-8'))
     currentPetActions = parsed.actions
-    currentTheme = parsed.theme || 'bro'
     currentPetName = parsed.name || '宠物'  // P0-3：宠物名跟随 pet.json
   } catch (e) {
     currentPetActions = null
-    currentTheme = 'bro'
   }
   console.log('[PetPet][诊断] pet:loaded →', petId, '动作数:', currentPetActions?Object.keys(currentPetActions).length:0)
   rebuildTrayMenu()
@@ -514,8 +512,6 @@ ipcMain.on('pet:action:notify', (_evt, info) => {
     diaryWindow.webContents.send('diary:status', info)
   }
 })
-let currentTheme = 'bro'
-
 function openDiaryWindow(petId) {
   // 无有效 petId 时给出可见错误，不再回退示例宠物（避免日记/活动写到错误目录）
   const pid = resolvePetId(petId)
@@ -523,14 +519,8 @@ function openDiaryWindow(petId) {
     dialog.showErrorBox('无法打开日记', '没有可用的宠物：未找到宠物包或宠物尚未加载')
     return
   }
-  const theme = (() => {
-    try {
-      return JSON.parse(fs.readFileSync(path.join(PETS_ROOT, pid, 'pet.json'), 'utf-8')).theme || 'bro'
-    } catch (e) {
-      return 'bro'
-    }
-  })()
-  const sendData = (win) => win.webContents.send('diary:data', { petId: pid, petName: currentPetName, theme, entries: readActivity(pid), status: currentActionInfo })
+  // theme 为契约元数据，当前版本不参与渲染（换肤入口隐藏，用户确认）——不传递给日记面板
+  const sendData = (win) => win.webContents.send('diary:data', { petId: pid, petName: currentPetName, entries: readActivity(pid), status: currentActionInfo })
   if (diaryWindow && !diaryWindow.isDestroyed()) {
     diaryWindow.focus()
     sendData(diaryWindow)
