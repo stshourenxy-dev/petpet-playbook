@@ -22,8 +22,49 @@ const { execFile } = require('child_process')
 
 const ID_RE = /^[a-z0-9_-]+$/
 const MAX_TEXTURE_WIDTH = 16384
+const MAX_TEXTURE_HEIGHT = 16384  // AI 工具审计 V-01：此前只查宽不查高（1024×1亿 头可通过 → OOM）
+const MAX_TEXTURE_PIXELS = 8192 * 8192  // 总像素上限（≈256MB 解码内存），防高度炸弹组合
+const MAX_ZIP_ENTRIES = 2000  // AI 工具审计 V-02：zip 条目数上限（防海量小文件炸弹）
+const MAX_UNZIP_BYTES = 500 * 1024 * 1024  // AI 工具审计 V-02：解压总量上限（防填盘）
 
-// ── 自由文本净化（Qwen 全量审计 V-10：提示注入链 + 间接注入载体）──────
+// 只读文件头部（AI 工具审计 V-02：此前 readFileSync 读整个精灵表只为取 30 字节头，4GB 文件可打爆主进程）
+function readHead(filePath, n = 64) {
+  const fd = fs.openSync(filePath, 'r')
+  try {
+    const buf = Buffer.alloc(n)
+    const read = fs.readSync(fd, buf, 0, n, 0)
+    return buf.subarray(0, read)
+  } finally {
+    fs.closeSync(fd)
+  }
+}
+
+// JPEG 尺寸解析（SOF0/1/2 marker：FFC0/C1/C2 后 5 字节起 2B 高 + 2B 宽）
+function jpgSize(buf) {
+  if (!buf || buf.length < 24) return null
+  for (let i = 2; i + 9 < buf.length; i++) {
+    if (buf[i] === 0xff && (buf[i + 1] === 0xc0 || buf[i + 1] === 0xc1 || buf[i + 1] === 0xc2)) {
+      return { width: buf.readUInt16BE(i + 7), height: buf.readUInt16BE(i + 5) }
+    }
+  }
+  return null
+}
+
+// GIF 尺寸解析（GIF87a/89a 头后 LE16 宽高）
+function gifSize(buf) {
+  if (!buf || buf.length < 10) return null
+  if (buf.toString('ascii', 0, 6) !== 'GIF87a' && buf.toString('ascii', 0, 6) !== 'GIF89a') return null
+  return { width: buf.readUInt16LE(6), height: buf.readUInt16LE(8) }
+}
+
+// BMP 尺寸解析（BM 头后 LE32 宽高，高取绝对值）
+function bmpSize(buf) {
+  if (!buf || buf.length < 26) return null
+  if (buf.toString('ascii', 0, 2) !== 'BM') return null
+  return { width: buf.readUInt32LE(18), height: Math.abs(buf.readInt32LE(22)) }
+}
+
+// ── 自由文本净化（AI 工具全量审计 V-10：提示注入链 + 间接注入载体）──────
 // 与 pipeline/validate_pet.py 的 clean_text 保持一致：剥离零宽/BiDi/控制字符，
 // 超长拒绝。JS 端为轻量版（正则一致，maxLength 一致）。
 const INVISIBLE_RE = /[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff\u00ad\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g
@@ -51,7 +92,7 @@ function pngSize(buf) {
 }
 
 // ── WebP 尺寸解析（只读头部，支持 VP8X/VP8/VP8L 三种 chunk）────────────
-// GLM 审计补充项：此前 WebP 精灵表跳过实际尺寸校验（仅 PNG 查 IHDR），
+// AI 工具审计补充项：此前 WebP 精灵表跳过实际尺寸校验（仅 PNG 查 IHDR），
 // 恶意 WebP 可绕过配置层上限检查 → 资源炸弹路径
 function webpSize(buf) {
   if (!buf || buf.length < 30) return null
@@ -103,7 +144,7 @@ function validatePetDir(dirPath) {
     return { ok: false, error: 'pet.json actions 为空（至少需要一个动作）' }
   }
 
-  // Qwen 审计 V-10：自由文本净化（name/bubbles/actions.label/diary）——
+  // AI 工具审计 V-10：自由文本净化（name/bubbles/actions.label/diary）——
   // 剥离零宽/BiDi/控制字符（防提示注入链）+ 长度上限（防存储/渲染滥用）
   const nameErr = checkText('name', pet.name, TEXT_MAX.name)
   if (nameErr) return { ok: false, error: nameErr }
@@ -122,7 +163,7 @@ function validatePetDir(dirPath) {
     if (!file) {
       return { ok: false, error: `动作 ${name} 缺少 file/sprite 字段` }
     }
-    // Qwen V-10：动作级自由文本净化（label/diary，可选字段——undefined 跳过）
+    // AI 工具审计 V-10：动作级自由文本净化（label/diary，可选字段——undefined 跳过）
     if (act.label !== undefined) {
       const labelErr = checkText(`动作 ${name}.label`, act.label, TEXT_MAX.label)
       if (labelErr) return { ok: false, error: labelErr }
@@ -141,22 +182,26 @@ function validatePetDir(dirPath) {
     if (!fs.existsSync(abs)) {
       return { ok: false, error: `动作 ${name} 的精灵表不存在：${file}` }
     }
-    // 纹理上限：帧宽×帧数 或 文件实际宽，二者都查
+    // 纹理上限：帧宽×帧数 或 文件实际宽高/总像素，都查（AI 工具审计 V-01 加固）
     const frames = act.frames || 1
     const frameWidth = act.frameWidth || pet.cellWidth || 0
     if (frameWidth > 0 && frameWidth * frames > MAX_TEXTURE_WIDTH) {
       return { ok: false, error: `动作 ${name} 帧宽×帧数 = ${frameWidth}×${frames} = ${frameWidth * frames}px 超过 16384px 上限` }
     }
-    if (/\.png$/i.test(file)) {
-      const size = pngSize(fs.readFileSync(abs))
-      if (size && size.width > MAX_TEXTURE_WIDTH) {
-        return { ok: false, error: `动作 ${name} 精灵表实际宽 ${size.width}px 超过 16384px 上限` }
+    // 只读头部（不再整文件读入，V-02）；按扩展名解析实际尺寸，统一查宽/高/总像素（V-01）
+    const head = readHead(abs, 64)
+    let size = null
+    if (/\.png$/i.test(file)) size = pngSize(head)
+    else if (/\.webp$/i.test(file)) size = webpSize(head)
+    else if (/\.jpe?g$/i.test(file)) size = jpgSize(head)
+    else if (/\.gif$/i.test(file)) size = gifSize(head)
+    else if (/\.bmp$/i.test(file)) size = bmpSize(head)
+    if (size) {
+      if (size.width > MAX_TEXTURE_WIDTH || size.height > MAX_TEXTURE_HEIGHT) {
+        return { ok: false, error: `动作 ${name} 精灵表尺寸 ${size.width}×${size.height}px 超过上限（单边 ≤${MAX_TEXTURE_WIDTH}）` }
       }
-    } else if (/\.webp$/i.test(file)) {
-      // GLM 审计补充：WebP 此前跳过尺寸校验，现补头部解析
-      const size = webpSize(fs.readFileSync(abs))
-      if (size && size.width > MAX_TEXTURE_WIDTH) {
-        return { ok: false, error: `动作 ${name} 精灵表实际宽 ${size.width}px 超过 16384px 上限` }
+      if (size.width * size.height > MAX_TEXTURE_PIXELS) {
+        return { ok: false, error: `动作 ${name} 精灵表总像素 ${size.width * size.height} 超过 ${MAX_TEXTURE_PIXELS} 上限` }
       }
     }
   }
@@ -272,11 +317,28 @@ async function importPetZip(zipPath, petsRoot) {
   try {
     // D-7: zip slip 防护——解压前枚举条目拦截绝对路径/../段；解压后 realpath 兜底
     const entries = await listZipEntries(zipPath)
+    // AI 工具审计 V-02：zip 炸弹防护——条目数上限（防海量小文件）
+    if (entries.length > MAX_ZIP_ENTRIES) {
+      return { ok: false, error: `压缩包条目数 ${entries.length} 超过上限 ${MAX_ZIP_ENTRIES}（zip 炸弹防护）` }
+    }
     const bad = checkZipEntries(entries)
     if (bad.length > 0) {
       return { ok: false, error: `压缩包包含不安全路径条目，已拒绝（zip slip）：${bad.slice(0, 3).join(', ')}${bad.length > 3 ? ' …' : ''}` }
     }
     await unzipTo(zipPath, tmp)
+    // AI 工具审计 V-02：解压总量上限（防填盘）
+    let totalBytes = 0
+    const walk = (dir) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name)
+        if (e.isDirectory()) walk(p)
+        else totalBytes += fs.statSync(p).size
+      }
+    }
+    walk(tmp)
+    if (totalBytes > MAX_UNZIP_BYTES) {
+      return { ok: false, error: `压缩包解压后总量 ${(totalBytes / 1024 / 1024).toFixed(1)}MB 超过上限 ${MAX_UNZIP_BYTES / 1024 / 1024}MB（zip 炸弹防护）` }
+    }
     const escaped = assertNoEscape(tmp)
     if (escaped.length > 0) {
       for (const p of escaped) { try { fs.rmSync(p, { recursive: true, force: true }) } catch { /* 尽力清理 */ } }
@@ -302,4 +364,4 @@ async function importPetZip(zipPath, petsRoot) {
   }
 }
 
-module.exports = { validatePetDir, importPetDir, importPetZip, unzipTo, pngSize, webpSize, locatePetRoot, listZipEntries, checkZipEntries, assertNoEscape, cleanText }
+module.exports = { validatePetDir, importPetDir, importPetZip, unzipTo, pngSize, webpSize, jpgSize, gifSize, bmpSize, locatePetRoot, listZipEntries, checkZipEntries, assertNoEscape, cleanText }

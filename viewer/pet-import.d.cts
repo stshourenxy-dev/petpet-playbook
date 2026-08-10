@@ -18,3 +18,6 @@ export function pngSize(buf: Buffer): { width: number; height: number } | null
 export function webpSize(buf: Buffer): { width: number; height: number } | null
 export function locatePetRoot(dirPath: string): string | null
 export function cleanText(s: string): string
+export function jpgSize(buf: Buffer): { width: number; height: number } | null
+export function gifSize(buf: Buffer): { width: number; height: number } | null
+export function bmpSize(buf: Buffer): { width: number; height: number } | null

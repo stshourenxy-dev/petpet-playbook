@@ -1,4 +1,4 @@
-// security-utils 安全函数单测（GLM 审计补充项：此前 main.js 内联函数零覆盖）
+// security-utils 安全函数单测（AI 工具审计补充项：此前 main.js 内联函数零覆盖）
 // 覆盖：safePetId 白名单边界 + isSafeUnderRoot 路径逃逸/符号链接/前缀绕过
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'

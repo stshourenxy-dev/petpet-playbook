@@ -301,8 +301,11 @@ ipcMain.handle('pet:load', (_evt, petId) => {
     const p = path.join(PETS_ROOT, safe, 'pet.json')
     const data = JSON.parse(fs.readFileSync(p, 'utf-8'))
     // D-5: 数值上限校验（2026-08-09，外部审计指出恶意 pet.json 可构造资源炸弹；上限对齐 pipeline/validate_pet.py 纹理铁律）
-    const MAX_TEXTURE = 16384, MAX_FRAMES = 500, MAX_FPS = 120
+    // AI 工具审计 V-05：补乘积校验（frameWidth×frames 单查必过但组合可构造 819 万像素宽纹理）+ actions 键数上限
+    const MAX_TEXTURE = 16384, MAX_FRAMES = 500, MAX_FPS = 120, MAX_ACTIONS = 50
     if (data && data.actions && typeof data.actions === 'object') {
+      const actionCount = Object.keys(data.actions).length
+      if (actionCount > MAX_ACTIONS) return { error: `actions 键数 ${actionCount} 超过上限(≤${MAX_ACTIONS})` }
       for (const [name, a] of Object.entries(data.actions)) {
         if (!a || typeof a !== 'object') return { error: `action ${name}: 配置非法` }
         const fw = a.frameWidth ?? a.cellWidth
@@ -311,6 +314,9 @@ ipcMain.handle('pet:load', (_evt, petId) => {
         if (fh != null && (!Number.isFinite(Number(fh)) || Number(fh) < 1 || Number(fh) > MAX_TEXTURE)) return { error: `action ${name}: frameHeight 超上限(≤${MAX_TEXTURE})` }
         if (a.frames != null && (!Number.isFinite(Number(a.frames)) || Number(a.frames) < 1 || Number(a.frames) > MAX_FRAMES)) return { error: `action ${name}: frames 超上限(≤${MAX_FRAMES})` }
         if (a.fps != null && (!Number.isFinite(Number(a.fps)) || Number(a.fps) < 1 || Number(a.fps) > MAX_FPS)) return { error: `action ${name}: fps 超上限(≤${MAX_FPS})` }
+        // V-05: 乘积校验——单项合法但组合超限的纹理（如 16384×500）会撑爆 WebGL
+        const prodW = (fw ?? 0) * (a.frames ?? 1)
+        if (prodW > MAX_TEXTURE) return { error: `action ${name}: frameWidth×frames = ${prodW} 超过 ${MAX_TEXTURE} 上限` }
       }
     }
     return data
@@ -582,7 +588,7 @@ ipcMain.handle('reminder:set', (_evt, spec) => {
     return { error: '时间无效' }
   }
   const repeat = ['none', 'daily', 'weekly'].includes(spec.repeat) ? spec.repeat : 'none'
-  const text = String(spec.text || '该办正事啦！').slice(0, 200) // GLM 审计：限制长度防存储膨胀/UI 溢出
+  const text = String(spec.text || '该办正事啦！').slice(0, 200) // AI 工具审计：限制长度防存储膨胀/UI 溢出
   const id = 'r' + (++reminderSeq)
   reminders.set(id, { at: spec.at, repeat, text })
   saveReminders()  // P0-5: 持久化

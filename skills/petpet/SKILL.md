@@ -1,6 +1,6 @@
 # PetPet Playbook — AI 助手工作指南
 
-> 让 AI 助手（Claude Code / OpenClaw 等）能正确地为 PetPet Playbook 项目工作：
+> 让各类 AI 助手（Claude Code / OpenClaw 等）能正确地为 PetPet Playbook 项目工作：
 > 读契约、跑管线、排查问题。受众 = 正在用本仓库做宠物桌宠的人 + 他们的 AI 助手。
 
 ## 项目是什么

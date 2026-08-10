@@ -29,7 +29,7 @@
 - **Electron 客户端加固**：`contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`（见 `viewer/main.js`）。
 - **宠物包文件读取安全**：所有文件读写经过 `safePetId` / `path.relative` 边界校验（realpath 纵深），防止路径穿越（见 `viewer/main.js`）。
 - **宠物包压缩导入安全**：zip 导入前枚举条目，拦截绝对路径 / `../` 段 / Windows 盘符；解压后 realpath 兑底防符号链接逃逸（zip slip，2026-08-10 加固，见 `viewer/pet-import.cjs`）。
-- **管线脚本无网络请求**：`pipeline/` 仅做本地图像处理，不发起任何网络调用。
+- **管线脚本网络行为**：`pipeline/` 仅做本地图像处理；`rembg`（抠图步骤）**首次运行会下载分割模型**（约 170MB，无哈希校验）——离线环境需预先缓存模型。
 
 ## 已知限制
 

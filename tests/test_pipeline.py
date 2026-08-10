@@ -254,7 +254,7 @@ def test_gen_prompt_negative_word_detection():
 
 
 def test_clean_text_strips_invisible():
-    """零宽/BiDi/控制字符应被剥离（Qwen 审计 V-10 提示注入链）"""
+    """零宽/BiDi/控制字符应被剥离（AI 工具审计 V-10 提示注入链）"""
     from validate_pet import _INVISIBLE_RE, clean_text  # pipeline 目录已由顶部 sys.path.insert 加入
     assert clean_text('红苕\u200b\u200b') == '红苕'
     assert clean_text('\u202e恶意覆盖\u202c') == '恶意覆盖'

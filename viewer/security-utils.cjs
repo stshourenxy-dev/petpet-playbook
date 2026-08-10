@@ -1,6 +1,6 @@
 // PetPet 安全工具（主进程纯函数，独立模块便于单测）
 // 职责：宠物 id 白名单校验 + 路径穿越防护（字符串级 + realpath 纵深）
-// 背景：原实现内联在 main.js，无单测覆盖——抽离后由 vitest 直接测试（GLM 审计补充项）
+// 背景：原实现内联在 main.js，无单测覆盖——抽离后由 vitest 直接测试（AI 工具审计补充项）
 'use strict'
 const path = require('path')
 const fs = require('fs')
