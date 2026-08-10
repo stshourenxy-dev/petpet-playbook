@@ -154,7 +154,7 @@ async function run() {
   }
   console.log(allPass ? '\n✅ 全部通过' : '\n❌ 存在失败项')
   console.log('详情 →', out)
-  app.quit()
+  app.exit(allPass ? 0 : 1) // FAIL 必须非零退出，否则 CI 假绿（workflow 只看 exit code）
 }
 
 app.whenReady().then(() => setTimeout(run, 6000))
