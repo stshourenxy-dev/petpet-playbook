@@ -5,6 +5,7 @@ const path = require('path')
 const fs = require('fs')
 const { pathToFileURL } = require('url')
 const { importPetDir, importPetZip } = require('./pet-import.cjs')
+const { safePetId, isSafeUnderRoot } = require('./security-utils.cjs')
 
 const PETS_ROOT = path.join(app.getPath('home'), '.petpet', 'pets')
 
@@ -348,17 +349,7 @@ const MIME = {
 }
 
 // D-6: 路径边界检查 + realpath 纵深（2026-08-09，外部审计指出符号链接可绕过字符串级检查）
-function isSafeUnderRoot(full) {
-  const rel = path.relative(PETS_ROOT, full)
-  if (rel.startsWith('..') || path.isAbsolute(rel)) return false
-  try {
-    const real = fs.realpathSync(full)
-    const relReal = path.relative(PETS_ROOT, real)
-    return !(relReal.startsWith('..') || path.isAbsolute(relReal))
-  } catch (e) {
-    return false // 不存在/无法解析 → 拒绝（等价 404）
-  }
-}
+// 已抽离至 security-utils.cjs（isSafeUnderRoot(full, petsRoot)），由 vitest 单测覆盖
 
 ipcMain.handle('pet:file', (_evt, petId, relPath) => {
   // N-3：优先走 petpet:// 协议（渲染层用短 URL），此 IPC 保留为兼容 fallback
@@ -367,7 +358,7 @@ ipcMain.handle('pet:file', (_evt, petId, relPath) => {
     if (!safe) return { error: 'invalid pet id' }
     const full = path.join(PETS_ROOT, safe, relPath)
     // D-2/D-6: 路径边界检查 + realpath 纵深（防前缀绕过 pets-evil/ 与符号链接逃逸）
-    if (!isSafeUnderRoot(full)) return { error: 'invalid path' }
+    if (!isSafeUnderRoot(full, PETS_ROOT)) return { error: 'invalid path' }
     const buf = fs.readFileSync(full)
     const ext = path.extname(full).toLowerCase()
     const mime = MIME[ext] || 'application/octet-stream'
@@ -387,7 +378,7 @@ function registerPetpetProtocol() {
       if (!safePetId(petId)) return new Response(null, { status: 403 })
       const full = path.join(PETS_ROOT, petId, relPath)
       // D-2/D-6: 路径边界检查 + realpath 纵深
-      if (!isSafeUnderRoot(full)) return new Response(null, { status: 403 })
+      if (!isSafeUnderRoot(full, PETS_ROOT)) return new Response(null, { status: 403 })
       return net.fetch(pathToFileURL(full).toString())
     } catch (e) {
       return new Response(null, { status: 404 })
@@ -451,10 +442,7 @@ function saveReminders() {
   }
 }
 
-// 校验 petId，防路径穿越
-function safePetId(id) {
-  return typeof id === 'string' && /^[a-z0-9_-]+$/i.test(id) ? id : null
-}
+// 校验 petId，防路径穿越（已抽离至 security-utils.cjs）
 
 // 解析有效 petId：preferred 优先，其次当前宠物；两者都无效返回 null
 // （P0-1 延续：不再回退硬编码示例宠物，避免日记/活动记录写错目录）
@@ -594,8 +582,9 @@ ipcMain.handle('reminder:set', (_evt, spec) => {
     return { error: '时间无效' }
   }
   const repeat = ['none', 'daily', 'weekly'].includes(spec.repeat) ? spec.repeat : 'none'
+  const text = String(spec.text || '该办正事啦！').slice(0, 200) // GLM 审计：限制长度防存储膨胀/UI 溢出
   const id = 'r' + (++reminderSeq)
-  reminders.set(id, { at: spec.at, repeat, text: String(spec.text || '该办正事啦！') })
+  reminders.set(id, { at: spec.at, repeat, text })
   saveReminders()  // P0-5: 持久化
   console.log(`[PetPet] 提醒已设置 #${id} → ${new Date(spec.at).toLocaleString()} [${repeat}] ${reminders.get(id).text}`)
   return { id }
