@@ -17,3 +17,4 @@ export function assertNoEscape(root: string): string[]
 export function pngSize(buf: Buffer): { width: number; height: number } | null
 export function webpSize(buf: Buffer): { width: number; height: number } | null
 export function locatePetRoot(dirPath: string): string | null
+export function cleanText(s: string): string

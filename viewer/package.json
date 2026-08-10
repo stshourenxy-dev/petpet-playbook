@@ -20,8 +20,8 @@
   "devDependencies": {
     "concurrently": "^9.1.0",
     "cross-env": "^7.0.3",
-    "electron": "^33.4.11",
-    "electron-builder": "^25.1.8",
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
     "typescript": "^5.7.2",
     "vite": "^6.0.7",
     "vitest": "^4.1.10",
