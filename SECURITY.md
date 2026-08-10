@@ -25,7 +25,8 @@
 
 - **不做真实文件操作**：宠物行为仅限视觉动画（淘气有边界——视觉淘气可以，真实文件操作不做）。参考 `docs/00-设计缘起.md` 的「为什么不做」清单。
 - **Electron 客户端加固**：`contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`（见 `viewer/main.js`）。
-- **宠物包路径校验**：所有文件读写经过 `safePetId` / `path.relative` 边界校验，防止路径穿越（见 `viewer/main.js`）。
+- **宠物包文件读取安全**：所有文件读写经过 `safePetId` / `path.relative` 边界校验（realpath 纵深），防止路径穿越（见 `viewer/main.js`）。
+- **宠物包压缩导入安全**：zip 导入前枚举条目，拦截绝对路径 / `../` 段 / Windows 盘符；解压后 realpath 兑底防符号链接逃逸（zip slip，2026-08-10 加固，见 `viewer/pet-import.cjs`）。
 - **管线脚本无网络请求**：`pipeline/` 仅做本地图像处理，不发起任何网络调用。
 
 ## 已知限制
