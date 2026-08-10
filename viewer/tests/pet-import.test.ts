@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { validatePetDir, locatePetRoot, importPetDir, pngSize, checkZipEntries, assertNoEscape } from '../pet-import.cjs'
+import { validatePetDir, locatePetRoot, importPetDir, pngSize, webpSize, checkZipEntries, assertNoEscape } from '../pet-import.cjs'
 
 // 构造最小合法 PNG（前 24 字节含 IHDR 宽高即可，pngSize 只读头部）
 function fakePng(width: number, height: number) {
@@ -12,6 +12,20 @@ function fakePng(width: number, height: number) {
   buf.write('IHDR', 12, 'ascii')
   buf.writeUInt32BE(width, 16)
   buf.writeUInt32BE(height, 20)
+  return buf
+}
+
+// 构造最小合法 WebP（RIFF+WEBP+VP8X 头，24 位 canvas 宽高）
+function fakeWebp(width: number, height: number) {
+  const buf = Buffer.alloc(30)
+  buf.write('RIFF', 0, 'ascii')
+  buf.writeUInt32LE(30 - 8, 4)
+  buf.write('WEBP', 8, 'ascii')
+  buf.write('VP8X', 12, 'ascii')
+  buf.writeUInt32LE(10, 16)
+  buf[20] = 0
+  buf.writeUIntLE(width - 1, 24, 3)
+  buf.writeUIntLE(height - 1, 27, 3)
   return buf
 }
 
@@ -101,6 +115,36 @@ describe('assertNoEscape', () => {
     const off = assertNoEscape(dir)
     expect(off.length).toBe(1)
     expect(off[0]).toContain('evil-link')
+  })
+})
+
+describe('webpSize', () => {
+  it('解析 VP8X 头宽高', () => {
+    expect(webpSize(fakeWebp(6144, 512))).toEqual({ width: 6144, height: 512 })
+  })
+  it('非 WebP 返回 null', () => {
+    expect(webpSize(Buffer.from('not a webp at all...'))).toBeNull()
+  })
+})
+
+describe('validatePetDir WebP 尺寸校验', () => {
+  it('WebP 精灵表实际宽超 16384 上限报错', () => {
+    const dir = makePack()
+    const petPath = path.join(dir, 'pet.json')
+    const pet = JSON.parse(fs.readFileSync(petPath, 'utf8'))
+    pet.actions.idle.file = 'idle/idle.webp'
+    fs.writeFileSync(petPath, JSON.stringify(pet))
+    fs.writeFileSync(path.join(dir, 'idle', 'idle.webp'), fakeWebp(20000, 512))
+    expect(validatePetDir(dir).ok).toBe(false)
+  })
+  it('合法 WebP 通过', () => {
+    const dir = makePack()
+    const petPath = path.join(dir, 'pet.json')
+    const pet = JSON.parse(fs.readFileSync(petPath, 'utf8'))
+    pet.actions.idle.file = 'idle/idle.webp'
+    fs.writeFileSync(petPath, JSON.stringify(pet))
+    fs.writeFileSync(path.join(dir, 'idle', 'idle.webp'), fakeWebp(6144, 512))
+    expect(validatePetDir(dir).ok).toBe(true)
   })
 })
 

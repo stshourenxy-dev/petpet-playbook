@@ -15,4 +15,5 @@ export function listZipEntries(zipPath: string): Promise<string[]>
 export function checkZipEntries(entries: string[]): string[]
 export function assertNoEscape(root: string): string[]
 export function pngSize(buf: Buffer): { width: number; height: number } | null
+export function webpSize(buf: Buffer): { width: number; height: number } | null
 export function locatePetRoot(dirPath: string): string | null

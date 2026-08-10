@@ -31,6 +31,34 @@ function pngSize(buf) {
   return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) }
 }
 
+// ── WebP 尺寸解析（只读头部，支持 VP8X/VP8/VP8L 三种 chunk）────────────
+// GLM 审计补充项：此前 WebP 精灵表跳过实际尺寸校验（仅 PNG 查 IHDR），
+// 恶意 WebP 可绕过配置层上限检查 → 资源炸弹路径
+function webpSize(buf) {
+  if (!buf || buf.length < 30) return null
+  if (buf.toString('ascii', 0, 4) !== 'RIFF' || buf.toString('ascii', 8, 12) !== 'WEBP') return null
+  const chunk = buf.toString('ascii', 12, 16)
+  if (chunk === 'VP8X') {
+    // 扩展格式：24 位 canvas 宽高（存的是 width-1/height-1）
+    if (buf.length < 30) return null
+    return { width: 1 + buf.readUIntLE(24, 3), height: 1 + buf.readUIntLE(27, 3) }
+  }
+  if (chunk === 'VP8 ') {
+    // 有损格式：帧头后 0x9D 0x01 0x2A 标记，随后 14 位宽高
+    if (buf.length < 30) return null
+    if (buf[23] !== 0x9d || buf[24] !== 0x01 || buf[25] !== 0x2a) return null
+    return { width: buf.readUInt16LE(26) & 0x3fff, height: buf.readUInt16LE(28) & 0x3fff }
+  }
+  if (chunk === 'VP8L') {
+    // 无损格式：0x2F 签名后 4 字节打包宽高（各 14 位 + 1）
+    if (buf.length < 25) return null
+    if (buf[20] !== 0x2f) return null
+    const bits = buf.readUInt32LE(21)
+    return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 }
+  }
+  return null
+}
+
 // ── 校验单个宠物包目录 ──────────────────────────────────────────────────
 // 返回 { ok: true, id, name, pet } 或 { ok: false, error }
 function validatePetDir(dirPath) {
@@ -74,6 +102,12 @@ function validatePetDir(dirPath) {
     }
     if (/\.png$/i.test(file)) {
       const size = pngSize(fs.readFileSync(abs))
+      if (size && size.width > MAX_TEXTURE_WIDTH) {
+        return { ok: false, error: `动作 ${name} 精灵表实际宽 ${size.width}px 超过 16384px 上限` }
+      }
+    } else if (/\.webp$/i.test(file)) {
+      // GLM 审计补充：WebP 此前跳过尺寸校验，现补头部解析
+      const size = webpSize(fs.readFileSync(abs))
       if (size && size.width > MAX_TEXTURE_WIDTH) {
         return { ok: false, error: `动作 ${name} 精灵表实际宽 ${size.width}px 超过 16384px 上限` }
       }
@@ -221,4 +255,4 @@ async function importPetZip(zipPath, petsRoot) {
   }
 }
 
-module.exports = { validatePetDir, importPetDir, importPetZip, unzipTo, pngSize, locatePetRoot, listZipEntries, checkZipEntries, assertNoEscape }
+module.exports = { validatePetDir, importPetDir, importPetZip, unzipTo, pngSize, webpSize, locatePetRoot, listZipEntries, checkZipEntries, assertNoEscape }
