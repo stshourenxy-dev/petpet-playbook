@@ -33,6 +33,8 @@
     "productName": "PetPet",
     "files": [
       "main.js",
+      "security-utils.cjs",
+      "pet-import.cjs",
       "preload.cjs",
       "panel-preload.cjs",
       "panel.html",
