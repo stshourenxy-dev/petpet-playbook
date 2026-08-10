@@ -175,6 +175,7 @@ docs/
 ├── 12-优化路线图.md    三轮审查产出合流：运行时/数据链路/分发生态三批次
 ├── 13-验证台账-20260810.md  修复闭环验证记录（5 commit：redshao 回退/zip slip/scheduleTransition/数据优先/schema 同步）
 ├── 14-实现状态矩阵.md      能力×Schema/Runtime/Viewer 实现状态唯一事实源（审计先读本表）
+├── 15-Future-Directions.md  后续探索方向（方向感非承诺，不排期）
 ├── 宠物包收录.md      用本方法论做出的宠物包登记（只收链接）
 └── 审查清单.md       对抗性 UI/UX 审查方法（发布前陌生人视角走查）
 ```
