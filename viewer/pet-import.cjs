@@ -26,6 +26,8 @@ const MAX_TEXTURE_HEIGHT = 16384  // AI 工具审计 V-01：此前只查宽不�
 const MAX_TEXTURE_PIXELS = 8192 * 8192  // 总像素上限（≈256MB 解码内存），防高度炸弹组合
 const MAX_ZIP_ENTRIES = 2000  // AI 工具审计 V-02：zip 条目数上限（防海量小文件炸弹）
 const MAX_UNZIP_BYTES = 500 * 1024 * 1024  // AI 工具审计 V-02：解压总量上限（防填盘）
+const MAX_FILE_BYTES = 64 * 1024 * 1024  // A5-CES-002：单文件上限
+const MAX_COMPRESSION_RATIO = 100  // A5-CES-002：压缩比上限（未压缩/压缩 >100 倍拒）
 
 // 只读文件头部（AI 工具审计 V-02：此前 readFileSync 读整个精灵表只为取 30 字节头，4GB 文件可打爆主进程）
 function readHead(filePath, n = 64) {
@@ -40,14 +42,29 @@ function readHead(filePath, n = 64) {
 }
 
 // JPEG 尺寸解析（SOF0/1/2 marker：FFC0/C1/C2 后 5 字节起 2B 高 + 2B 宽）
+// AI 工具审计 V-01 加固（A5-CES-003）：SOF 可能位于较长 EXIF/APP 段之后，
+// 必须按 segment 长度流式跳过（64KB 上限），不能只查前 64 字节
 function jpgSize(buf) {
-  if (!buf || buf.length < 24) return null
-  for (let i = 2; i + 9 < buf.length; i++) {
-    if (buf[i] === 0xff && (buf[i + 1] === 0xc0 || buf[i + 1] === 0xc1 || buf[i + 1] === 0xc2)) {
+  if (!buf || buf.length < 4) return null
+  if (buf[0] !== 0xff || buf[1] !== 0xd8) return null  // 非 JPEG 魔数
+  let i = 2
+  const limit = Math.min(buf.length, 65536)
+  while (i + 4 <= limit) {
+    if (buf[i] !== 0xff) return null  // 段标记失步 → 损坏
+    const marker = buf[i + 1]
+    if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7)) {
+      i += 2  // 无长度段（SOI/EOI/RST）
+      continue
+    }
+    if (marker === 0xc0 || marker === 0xc1 || marker === 0xc2) {
+      if (i + 9 > buf.length) return null
       return { width: buf.readUInt16BE(i + 7), height: buf.readUInt16BE(i + 5) }
     }
+    const segLen = buf.readUInt16BE(i + 2)
+    if (segLen < 2) return null
+    i += 2 + segLen
   }
-  return null
+  return null  // 64KB 内未找到 SOF → 无法验证尺寸
 }
 
 // GIF 尺寸解析（GIF87a/89a 头后 LE16 宽高）
@@ -179,7 +196,19 @@ function validatePetDir(dirPath) {
       const textErr = checkText(`动作 ${name}.diary.text`, d.text, TEXT_MAX.diary)
       if (textErr) return { ok: false, error: textErr }
     }
+    // P0-4（A5-CES-004）：action 必填对齐 schema required（此前 JS 缺失也通过，Python 必填）
+    for (const f of ['frames', 'frameWidth', 'frameHeight']) {
+      const v = act[f]
+      if (v == null || !Number.isFinite(Number(v)) || Number(v) <= 0) {
+        return { ok: false, error: `动作 ${name}: ${f} 必填且为正数（对齐 schema required）` }
+      }
+    }
+    // P0-4（A5-CES-004）：资源路径必须位于包根内（此前 ../outside.png 也能通过）
     const abs = path.join(dirPath, file)
+    const rel = path.relative(dirPath, abs)
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      return { ok: false, error: `动作 ${name} 精灵表路径越出包根（不允许 ../ 或绝对路径）：${file}` }
+    }
     if (!fs.existsSync(abs)) {
       return { ok: false, error: `动作 ${name} 的精灵表不存在：${file}` }
     }
@@ -190,20 +219,27 @@ function validatePetDir(dirPath) {
       return { ok: false, error: `动作 ${name} 帧宽×帧数 = ${frameWidth}×${frames} = ${frameWidth * frames}px 超过 16384px 上限` }
     }
     // 只读头部（不再整文件读入，V-02）；按扩展名解析实际尺寸，统一查宽/高/总像素（V-01）
-    const head = readHead(abs, 64)
+    // A5-CES-003：解析失败必须 fail-closed（未知格式/损坏头/尺寸头超扫描范围一律拒绝）
+    const head = readHead(abs, 65536)
     let size = null
+    let knownFormat = true
     if (/\.png$/i.test(file)) size = pngSize(head)
     else if (/\.webp$/i.test(file)) size = webpSize(head)
     else if (/\.jpe?g$/i.test(file)) size = jpgSize(head)
     else if (/\.gif$/i.test(file)) size = gifSize(head)
     else if (/\.bmp$/i.test(file)) size = bmpSize(head)
-    if (size) {
-      if (size.width > MAX_TEXTURE_WIDTH || size.height > MAX_TEXTURE_HEIGHT) {
-        return { ok: false, error: `动作 ${name} 精灵表尺寸 ${size.width}×${size.height}px 超过上限（单边 ≤${MAX_TEXTURE_WIDTH}）` }
-      }
-      if (size.width * size.height > MAX_TEXTURE_PIXELS) {
-        return { ok: false, error: `动作 ${name} 精灵表总像素 ${size.width * size.height} 超过 ${MAX_TEXTURE_PIXELS} 上限` }
-      }
+    else knownFormat = false
+    if (!knownFormat) {
+      return { ok: false, error: `动作 ${name} 精灵表格式不支持（仅 png/webp/jpg/gif/bmp）：${file}` }
+    }
+    if (!size) {
+      return { ok: false, error: `动作 ${name} 精灵表头部解析失败或损坏（无法验证尺寸）：${file}` }
+    }
+    if (size.width > MAX_TEXTURE_WIDTH || size.height > MAX_TEXTURE_HEIGHT) {
+      return { ok: false, error: `动作 ${name} 精灵表尺寸 ${size.width}×${size.height}px 超过上限（单边 ≤${MAX_TEXTURE_WIDTH}）` }
+    }
+    if (size.width * size.height > MAX_TEXTURE_PIXELS) {
+      return { ok: false, error: `动作 ${name} 精灵表总像素 ${size.width * size.height} 超过 ${MAX_TEXTURE_PIXELS} 上限` }
     }
   }
 
@@ -233,6 +269,38 @@ function listZipEntries(zipPath) {
     execFile(tool, args, { timeout: 30000 }, (err, stdout) => {
       if (err) reject(new Error(`读取压缩包条目失败（${tool}）：${err.message}`))
       else resolve(stdout.split(/\r?\n/).filter(Boolean))
+    })
+  })
+}
+
+// ── 解压前预算（A5-CES-002：总量/单文件/压缩比在 unzip 之前检查，防填盘）──
+// unzip -l 输出每行: Length  Date  Time  Name；tar -tvf 输出含 size 字段
+function listZipSizes(zipPath) {
+  return new Promise((resolve, reject) => {
+    const isWin = process.platform === 'win32'
+    const tool = isWin ? 'tar' : 'unzip'
+    const args = isWin ? ['-tvf', zipPath] : ['-l', zipPath]
+    execFile(tool, args, { timeout: 30000 }, (err, stdout) => {
+      if (err) reject(new Error(`读取压缩包大小预算失败（${tool}）：${err.message}`))
+      else {
+        const sizes = []
+        const lines = stdout.split(/\r?\n/)
+        for (const line of lines) {
+          if (!isWin) {
+            // unzip -l: <length>  <MM-DD-YYYY> <time> <name>（日期是美国格式 MM-DD-YYYY）
+            const m = line.match(/^\s*(\d+)\s+\d{2}-\d{2}-\d{4}/)
+            if (m) sizes.push({ size: Number(m[1]), name: line.slice(30).trim() })
+          } else {
+            // tar -tvf（Windows bsdtar）: -rw-r--r-- 0 0 0 <size> <MM-DD-YYYY> <time> <name>
+            // macOS bsdtar: -rw-r--r-- 0 0 0 <size> <Mon DD HH:MM> <name>——统一取第 5 个字段
+            const t = line.split(/\s+/)
+            if (t.length >= 5 && /^\d+$/.test(t[4])) {
+              sizes.push({ size: Number(t[4]), name: t.slice(5).join(' ') })
+            }
+          }
+        }
+        resolve(sizes)
+      }
     })
   })
 }
@@ -326,20 +394,21 @@ async function importPetZip(zipPath, petsRoot) {
     if (bad.length > 0) {
       return { ok: false, error: `压缩包包含不安全路径条目，已拒绝（zip slip）：${bad.slice(0, 3).join(', ')}${bad.length > 3 ? ' …' : ''}` }
     }
-    await unzipTo(zipPath, tmp)
-    // AI 工具审计 V-02：解压总量上限（防填盘）
-    let totalBytes = 0
-    const walk = (dir) => {
-      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-        const p = path.join(dir, e.name)
-        if (e.isDirectory()) walk(p)
-        else totalBytes += fs.statSync(p).size
-      }
-    }
-    walk(tmp)
+    // A5-CES-002：解压前预算检查（unzip -l / tar -tvf 读 uncompressed 元数据，未解压即拒绝）
+    const sizes = await listZipSizes(zipPath)
+    const totalBytes = sizes.reduce((s, f) => s + f.size, 0)
+    const zipBytes = fs.statSync(zipPath).size
     if (totalBytes > MAX_UNZIP_BYTES) {
-      return { ok: false, error: `压缩包解压后总量 ${(totalBytes / 1024 / 1024).toFixed(1)}MB 超过上限 ${MAX_UNZIP_BYTES / 1024 / 1024}MB（zip 炸弹防护）` }
+      return { ok: false, error: `压缩包未压缩总量 ${(totalBytes / 1024 / 1024).toFixed(1)}MB 超过上限 ${MAX_UNZIP_BYTES / 1024 / 1024}MB（zip 炸弹防护，解压前拦截）` }
     }
+    const maxFile = sizes.reduce((m, f) => Math.max(m, f.size), 0)
+    if (maxFile > MAX_FILE_BYTES) {
+      return { ok: false, error: `压缩包单文件 ${(maxFile / 1024 / 1024).toFixed(1)}MB 超过上限 ${MAX_FILE_BYTES / 1024 / 1024}MB` }
+    }
+    if (zipBytes > 0 && totalBytes / zipBytes > MAX_COMPRESSION_RATIO) {
+      return { ok: false, error: `压缩比 ${Math.round(totalBytes / zipBytes)}× 超过上限 ${MAX_COMPRESSION_RATIO}×（zip 炸弹防护）` }
+    }
+    await unzipTo(zipPath, tmp)
     const escaped = assertNoEscape(tmp)
     if (escaped.length > 0) {
       for (const p of escaped) { try { fs.rmSync(p, { recursive: true, force: true }) } catch { /* 尽力清理 */ } }
@@ -365,4 +434,4 @@ async function importPetZip(zipPath, petsRoot) {
   }
 }
 
-module.exports = { validatePetDir, importPetDir, importPetZip, unzipTo, pngSize, webpSize, jpgSize, gifSize, bmpSize, locatePetRoot, listZipEntries, checkZipEntries, assertNoEscape, cleanText }
+module.exports = { validatePetDir, importPetDir, importPetZip, unzipTo, pngSize, webpSize, jpgSize, gifSize, bmpSize, locatePetRoot, listZipEntries, listZipSizes, checkZipEntries, assertNoEscape, cleanText }
