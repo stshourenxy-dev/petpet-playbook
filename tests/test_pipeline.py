@@ -255,7 +255,7 @@ def test_gen_prompt_negative_word_detection():
 
 def test_clean_text_strips_invisible():
     """零宽/BiDi/控制字符应被剥离（Qwen 审计 V-10 提示注入链）"""
-    from pipeline.validate_pet import _INVISIBLE_RE, clean_text
+    from validate_pet import _INVISIBLE_RE, clean_text  # pipeline 目录已由顶部 sys.path.insert 加入
     assert clean_text('红苕\u200b\u200b') == '红苕'
     assert clean_text('\u202e恶意覆盖\u202c') == '恶意覆盖'
     assert clean_text('正常\u00ad文本') == '正常文本'
@@ -265,7 +265,7 @@ def test_clean_text_strips_invisible():
 
 def test_validate_pet_rejects_text_injection():
     """带零宽/伪系统消息的 pet.json 应被拒（间接注入载体）"""
-    from pipeline.validate_pet import validate_pet_json
+    from validate_pet import validate_pet_json  # 同上：裸 pytest 不加仓库根到 sys.path，必须用直接模块名
     data = {
         'version': 3, 'id': 'inject-test', 'name': '测试',
         'bubbles': ['\u200b\u200b\u200b'],  # 纯零宽 → 剥离后为空
@@ -277,7 +277,7 @@ def test_validate_pet_rejects_text_injection():
 
 def test_validate_pet_rejects_oversized_text():
     """超长自由文本应被拒（maxLength 防存储/渲染滥用）"""
-    from pipeline.validate_pet import validate_pet_json
+    from validate_pet import validate_pet_json  # 同上：裸 pytest 不加仓库根到 sys.path，必须用直接模块名
     data = {
         'version': 3, 'id': 'long-text', 'name': 'x' * 200,
         'actions': {'idle': {'file': 'x.png', 'frames': 1, 'fps': 4,
