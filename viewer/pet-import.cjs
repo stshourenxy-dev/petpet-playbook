@@ -93,10 +93,10 @@ function cleanText(s) {
 
 function checkText(field, v, maxLen) {
   // 返回错误消息或 null
+  // A5-CES-005：语义从「剥离后检查」改为「含不可见/控制字符即拒绝」（不写回、不落盘净化）
   if (typeof v !== 'string') return `${field} 应为字符串`
-  const cleaned = cleanText(v)
-  if (!cleaned.trim()) return `${field} 剥离不可见字符后为空（可能含零宽/控制字符注入）`
-  if (cleaned.length > maxLen) return `${field} 超长（≤${maxLen} 字符），实际 ${cleaned.length}`
+  if (INVISIBLE_RE.test(v)) return `${field} 含不可见/控制字符（零宽/BiDi/控制，已拒绝）`
+  if (v.length > maxLen) return `${field} 超长（≤${maxLen} 字符），实际 ${v.length}`
   return null
 }
 

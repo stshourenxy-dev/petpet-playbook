@@ -59,13 +59,12 @@ def check_text(
         errors += 1
         err(f"{field} 应为字符串，实际 {v!r}")
         return errors
-    cleaned = clean_text(v)
-    if not cleaned.strip():
+    if _INVISIBLE_RE.search(v):
         errors += 1
-        err(f"{field} 剥离不可见字符后为空（可能含零宽/控制字符注入）")
-    elif len(cleaned) > max_len:
+        err(f"{field} 含不可见/控制字符（零宽/BiDi/控制，已拒绝——A5-CES-005 语义）")
+    elif len(v) > max_len:
         errors += 1
-        err(f"{field} 超长（≤{max_len} 字符），实际 {len(cleaned)}——防止存储/渲染滥用")
+        err(f"{field} 超长（≤{max_len} 字符），实际 {len(v)}——防止存储/渲染滥用")
     return errors
 
 
@@ -115,13 +114,12 @@ def validate_pet_json(data: dict[str, Any], base_dir: str) -> int:
     elif isinstance(data.get("bubbles"), list):
         for i, b in enumerate(data["bubbles"]):
             # 逐条净化校验（不修改原数据——校验器只报错不写回）
-            cleaned = clean_text(b)
-            if not cleaned.strip():
+            if _INVISIBLE_RE.search(b):
                 errors += 1
-                err(f"bubbles[{i}] 剥离不可见字符后为空")
-            elif len(cleaned) > TEXT_MAX["bubble"]:
+                err(f"bubbles[{i}] 含不可见/控制字符（已拒绝）")
+            elif len(b) > TEXT_MAX["bubble"]:
                 errors += 1
-                err(f"bubbles[{i}] 超长（≤{TEXT_MAX['bubble']} 字符），实际 {len(cleaned)}")
+                err(f"bubbles[{i}] 超长（≤{TEXT_MAX['bubble']} 字符），实际 {len(b)}")
 
     # V2-A: identity/temperament 校验（2026-08-09，可选字段，缺省=中性）
     if "identity" in data:
