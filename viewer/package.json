@@ -1,6 +1,6 @@
 {
   "name": "petpet-viewer",
-  "version": "0.2.0",
+  "version": "1.2.0",
   "description": "PetPet 桌面宠物查看器（Electron + PixiJS v8）",
   "main": "main.js",
   "author": "QClaw",
