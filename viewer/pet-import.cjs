@@ -23,6 +23,25 @@ const { execFile } = require('child_process')
 const ID_RE = /^[a-z0-9_-]+$/
 const MAX_TEXTURE_WIDTH = 16384
 
+// ── 自由文本净化（Qwen 全量审计 V-10：提示注入链 + 间接注入载体）──────
+// 与 pipeline/validate_pet.py 的 clean_text 保持一致：剥离零宽/BiDi/控制字符，
+// 超长拒绝。JS 端为轻量版（正则一致，maxLength 一致）。
+const INVISIBLE_RE = /[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff\u00ad\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g
+const TEXT_MAX = { name: 50, bubble: 100, label: 30, diary: 200, species: 50, attr: 50, habitKey: 30 }
+
+function cleanText(s) {
+  return String(s).replace(INVISIBLE_RE, '')
+}
+
+function checkText(field, v, maxLen) {
+  // 返回错误消息或 null
+  if (typeof v !== 'string') return `${field} 应为字符串`
+  const cleaned = cleanText(v)
+  if (!cleaned.trim()) return `${field} 剥离不可见字符后为空（可能含零宽/控制字符注入）`
+  if (cleaned.length > maxLen) return `${field} 超长（≤${maxLen} 字符），实际 ${cleaned.length}`
+  return null
+}
+
 // ── PNG 尺寸解析（只读 IHDR，无需完整解码）─────────────────────────────
 function pngSize(buf) {
   if (!buf || buf.length < 24) return null
@@ -84,11 +103,39 @@ function validatePetDir(dirPath) {
     return { ok: false, error: 'pet.json actions 为空（至少需要一个动作）' }
   }
 
+  // Qwen 审计 V-10：自由文本净化（name/bubbles/actions.label/diary）——
+  // 剥离零宽/BiDi/控制字符（防提示注入链）+ 长度上限（防存储/渲染滥用）
+  const nameErr = checkText('name', pet.name, TEXT_MAX.name)
+  if (nameErr) return { ok: false, error: nameErr }
+  if (Array.isArray(pet.bubbles)) {
+    for (let i = 0; i < pet.bubbles.length; i++) {
+      const e = checkText(`bubbles[${i}]`, pet.bubbles[i], TEXT_MAX.bubble)
+      if (e) return { ok: false, error: e }
+    }
+  } else if (pet.bubbles !== undefined) {
+    return { ok: false, error: 'bubbles 应为字符串数组' }
+  }
+
   // 精灵表存在性 + 纹理总宽上限
   for (const [name, act] of Object.entries(pet.actions)) {
     const file = act.file || act.sprite
     if (!file) {
       return { ok: false, error: `动作 ${name} 缺少 file/sprite 字段` }
+    }
+    // Qwen V-10：动作级自由文本净化（label/diary，可选字段——undefined 跳过）
+    if (act.label !== undefined) {
+      const labelErr = checkText(`动作 ${name}.label`, act.label, TEXT_MAX.label)
+      if (labelErr) return { ok: false, error: labelErr }
+    }
+    if (act.diary !== undefined) {
+      const d = act.diary
+      if (!d || typeof d !== 'object' || typeof d.mood !== 'string' || typeof d.text !== 'string') {
+        return { ok: false, error: `动作 ${name}.diary 应含 mood（字符串）和 text（字符串）` }
+      }
+      const moodErr = checkText(`动作 ${name}.diary.mood`, d.mood, TEXT_MAX.label)
+      if (moodErr) return { ok: false, error: moodErr }
+      const textErr = checkText(`动作 ${name}.diary.text`, d.text, TEXT_MAX.diary)
+      if (textErr) return { ok: false, error: textErr }
     }
     const abs = path.join(dirPath, file)
     if (!fs.existsSync(abs)) {
@@ -255,4 +302,4 @@ async function importPetZip(zipPath, petsRoot) {
   }
 }
 
-module.exports = { validatePetDir, importPetDir, importPetZip, unzipTo, pngSize, webpSize, locatePetRoot, listZipEntries, checkZipEntries, assertNoEscape }
+module.exports = { validatePetDir, importPetDir, importPetZip, unzipTo, pngSize, webpSize, locatePetRoot, listZipEntries, checkZipEntries, assertNoEscape, cleanText }

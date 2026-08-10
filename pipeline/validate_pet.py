@@ -30,6 +30,44 @@ VALID_AGE_STAGES = ("幼年", "成年", "老年")
 VALID_DEVICES = ("Windows", "Mac", "双端")
 VALID_BUILDS = ("细长", "标准", "粗壮", "胖墩")
 
+# ── 自由文本净化（Qwen 全量审计 V-10：提示注入链 + 间接注入载体）──────
+# 剥离：零宽/不可见（U+200B-200F）、BiDi 覆盖（U+202A-202E、U+2066-2069）、
+# 字连接/格式（U+2060-206F）、BOM（U+FEFF）、软连字符（U+00AD）、
+# 控制字符（C0 除 \n\t、C1）。净化后超长拒绝（maxLength 防存储/渲染滥用）。
+_INVISIBLE_RE = re.compile(
+    r"[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff\u00ad"
+    r"\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]"
+)
+TEXT_MAX = {"name": 50, "bubble": 100, "label": 30, "diary": 200, "species": 50, "attr": 50, "habit_key": 30}
+
+
+def clean_text(s: str) -> str:
+    """剥离不可见/控制字符；仅保留可见文本（\n\t 保留）。"""
+    return _INVISIBLE_RE.sub("", s)
+
+
+def check_text(
+    data: dict[str, Any],
+    field: str,
+    key: str,
+    max_len: int,
+    errors: int,
+) -> int:
+    """自由文本字段检查：剥离不可见字符后，非空 + 长度上限。返回错误数。"""
+    v = data.get(key)
+    if not isinstance(v, str):
+        errors += 1
+        err(f"{field} 应为字符串，实际 {v!r}")
+        return errors
+    cleaned = clean_text(v)
+    if not cleaned.strip():
+        errors += 1
+        err(f"{field} 剥离不可见字符后为空（可能含零宽/控制字符注入）")
+    elif len(cleaned) > max_len:
+        errors += 1
+        err(f"{field} 超长（≤{max_len} 字符），实际 {len(cleaned)}——防止存储/渲染滥用")
+    return errors
+
 
 def err(msg: str) -> None:
     print(f"  ❌ {msg}")
@@ -61,6 +99,8 @@ def validate_pet_json(data: dict[str, Any], base_dir: str) -> int:
     if not isinstance(data.get("name"), str) or not data["name"].strip():
         errors += 1
         err(f"name 必填（显示名），实际 {data.get('name')!r}")
+    else:
+        errors = check_text(data, "name", "name", TEXT_MAX["name"], errors)
 
     if "theme" in data and data["theme"] not in VALID_THEMES:
         errors += 1
@@ -72,6 +112,16 @@ def validate_pet_json(data: dict[str, Any], base_dir: str) -> int:
     ):
         errors += 1
         err("bubbles 应为非空字符串数组（气泡文案池）")
+    elif isinstance(data.get("bubbles"), list):
+        for i, b in enumerate(data["bubbles"]):
+            # 逐条净化校验（不修改原数据——校验器只报错不写回）
+            cleaned = clean_text(b)
+            if not cleaned.strip():
+                errors += 1
+                err(f"bubbles[{i}] 剥离不可见字符后为空")
+            elif len(cleaned) > TEXT_MAX["bubble"]:
+                errors += 1
+                err(f"bubbles[{i}] 超长（≤{TEXT_MAX['bubble']} 字符），实际 {len(cleaned)}")
 
     # V2-A: identity/temperament 校验（2026-08-09，可选字段，缺省=中性）
     if "identity" in data:
@@ -83,15 +133,24 @@ def validate_pet_json(data: dict[str, Any], base_dir: str) -> int:
             if "species" in ident and (not isinstance(ident["species"], str) or not ident["species"].strip()):
                 errors += 1
                 err("identity.species 应为非空字符串")
+            elif isinstance(ident.get("species"), str):
+                errors = check_text(ident, "identity.species", "species", TEXT_MAX["species"], errors)
             if "appearance" in ident and not isinstance(ident["appearance"], dict):
                 errors += 1
                 err("identity.appearance 应为对象")
+            elif isinstance(ident.get("appearance"), dict):
+                for k, v in ident["appearance"].items():
+                    if isinstance(v, str):
+                        errors = check_text(ident["appearance"], f"identity.appearance.{k}", k, TEXT_MAX["attr"], errors)
             if "habits" in ident and (
                 not isinstance(ident["habits"], dict)
                 or not all(isinstance(v, bool) for v in ident["habits"].values())
             ):
                 errors += 1
                 err("identity.habits 应为布尔值对象（如 {likes_ball: true}）")
+            elif isinstance(ident.get("habits"), dict):
+                for k in ident["habits"]:
+                    errors = check_text(ident["habits"], f"identity.habits.{k}", k, TEXT_MAX["habit_key"], errors)
 
     if "temperament" in data:
         temp = data["temperament"]
@@ -166,6 +225,8 @@ def validate_pet_json(data: dict[str, Any], base_dir: str) -> int:
         if "label" in act and (not isinstance(act["label"], str) or not act["label"].strip()):
             errors += 1
             err(f"动作 {name}: label 应为非空字符串")
+        elif isinstance(act.get("label"), str):
+            errors = check_text(act, f"动作 {name}.label", "label", TEXT_MAX["label"], errors)
         if "diary" in act:
             d = act["diary"]
             if not isinstance(d, dict) or not isinstance(d.get("mood"), str) or not isinstance(
@@ -173,6 +234,11 @@ def validate_pet_json(data: dict[str, Any], base_dir: str) -> int:
             ):
                 errors += 1
                 err(f"动作 {name}: diary 应含 mood（字符串）和 text（字符串）")
+            else:
+                if isinstance(d.get("mood"), str):
+                    errors = check_text(d, f"动作 {name}.diary.mood", "mood", TEXT_MAX["label"], errors)
+                if isinstance(d.get("text"), str):
+                    errors = check_text(d, f"动作 {name}.diary.text", "text", TEXT_MAX["diary"], errors)
 
         # 精灵表存在性 + 纹理上限（铁律：帧数 × cellWidth ≤ 16384）
         if rel and isinstance(rel, str):

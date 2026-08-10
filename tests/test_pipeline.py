@@ -251,3 +251,37 @@ def test_gen_prompt_negative_word_detection():
     """动作描述含否定词应被检出（铁律 1）"""
     assert check_negative_words('不要尾巴虚化') == ['不要']
     assert check_negative_words('欢快奔跑') == []
+
+
+def test_clean_text_strips_invisible():
+    """零宽/BiDi/控制字符应被剥离（Qwen 审计 V-10 提示注入链）"""
+    from pipeline.validate_pet import clean_text, _INVISIBLE_RE
+    assert clean_text('红苕\u200b\u200b') == '红苕'
+    assert clean_text('\u202e恶意覆盖\u202c') == '恶意覆盖'
+    assert clean_text('正常\u00ad文本') == '正常文本'
+    assert clean_text('a\x00b\x07c') == 'abc'
+    assert _INVISIBLE_RE.search('\ufeef') is None  # 非注入字符不动
+
+
+def test_validate_pet_rejects_text_injection():
+    """带零宽/伪系统消息的 pet.json 应被拒（间接注入载体）"""
+    from pipeline.validate_pet import validate_pet_json, clean_text
+    data = {
+        'version': 3, 'id': 'inject-test', 'name': '测试',
+        'bubbles': ['\u200b\u200b\u200b'],  # 纯零宽 → 剥离后为空
+        'actions': {'idle': {'file': 'x.png', 'frames': 1, 'fps': 4}},
+    }
+    errors = validate_pet_json(data, '/tmp')
+    assert errors >= 1  # bubbles 纯零宽应报错
+
+
+def test_validate_pet_rejects_oversized_text():
+    """超长自由文本应被拒（maxLength 防存储/渲染滥用）"""
+    from pipeline.validate_pet import validate_pet_json
+    data = {
+        'version': 3, 'id': 'long-text', 'name': 'x' * 200,
+        'actions': {'idle': {'file': 'x.png', 'frames': 1, 'fps': 4,
+                             'label': 'y' * 100}},
+    }
+    errors = validate_pet_json(data, '/tmp')
+    assert errors >= 2  # name 超长 + label 超长
