@@ -1,0 +1,54 @@
+name: Boundary Test
+
+# 集成边界测试（Electron headless，xvfb）——GLM 审计建议 Layer 2
+# 覆盖：主进程 IPC / preload / 多宠切换 / 转移链守卫（boundary-test.cjs 四场景）
+# 依赖 fixtures：demo 复制 x2（fixture-a 手动补 wiggle 动作复用 knead 表，供 reminder 场景）
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  boundary:
+    name: Electron 边界集成测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: viewer/package-lock.json
+      - name: 安装依赖
+        run: npm ci
+        working-directory: viewer
+      - name: 构建渲染层
+        run: npm run build
+        working-directory: viewer
+      - name: 准备测试宠物包 fixtures
+        run: |
+          mkdir -p ~/.petpet/pets
+          cp -r examples/redshao-demo ~/.petpet/pets/fixture-a
+          cp -r examples/redshao-demo ~/.petpet/pets/fixture-b
+          python3 - <<'PY'
+          import json, os
+          for i in ('a', 'b'):
+              p = os.path.expanduser(f'~/.petpet/pets/fixture-{i}/pet.json')
+              d = json.load(open(p))
+              d['id'] = f'fixture-{i}'
+              d['name'] = f'Fixture {i}'
+              if i == 'a':
+                  # 补 wiggle 动作（复用 knead 表）供 reminder 场景
+                  d['actions']['wiggle'] = {
+                      'file': 'knead/knead_sheet.webp', 'frames': 12,
+                      'frameWidth': 512, 'frameHeight': 288, 'fps': 5,
+                      'loop': True, 'weight': 10
+                  }
+              json.dump(d, open(p, 'w'), ensure_ascii=False, indent=2)
+          PY
+          echo "fixtures 就绪: $(ls ~/.petpet/pets)"
+      - name: 边界测试（xvfb + --no-sandbox）
+        run: xvfb-run -a npx electron scripts/boundary-test.cjs --pets fixture-a,fixture-b --no-sandbox
+        working-directory: viewer
+        env:
+          ELECTRON_DISABLE_SANDBOX: '1'

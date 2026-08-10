@@ -10,7 +10,9 @@
     "build": "tsc --noEmit && vite build",
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:boundary": "electron scripts/boundary-test.cjs",
+    "test:mem": "electron scripts/memtest.cjs"
   },
   "dependencies": {
     "pixi.js": "^8.6.6"

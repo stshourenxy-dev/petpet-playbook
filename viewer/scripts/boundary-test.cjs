@@ -20,6 +20,12 @@ const os = require('os')
 require(path.join(__dirname, '..', 'main.js'))
 const { app, BrowserWindow, ipcMain } = require('electron')
 
+function parseArgs() {
+  const a = process.argv.slice(1)
+  const i = a.indexOf('--pets')
+  return i >= 0 ? a[i + 1].split(',') : null
+}
+
 const events = []
 ipcMain.on('pet:action:notify', (_e, info) => events.push({ t: Date.now(), ...info }))
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -61,16 +67,16 @@ function petHasAction(petId, action) {
 async function run() {
   const win = BrowserWindow.getAllWindows()[0]
   if (!win) { console.error('NO_WINDOW'); process.exit(1) }
-  const pets = discoverPets()
+  const pets = parseArgs() || discoverPets()
+  if (pets.length < 2) { console.error('需要 ≥2 个宠物包（--pets id1,id2 或 ~/.petpet/pets 下准备）'); app.exit(1); return }
   const results = []
 
   // B 场景需要 wiggle 动作：主宠物优先选含 wiggle 的（提醒播 wiggle），切换目标取另一个
   const mainPet = pets.find(p => petHasAction(p, 'wiggle')) || pets[0]
   const otherPet = pets.find(p => p !== mainPet)
-  if (mainPet !== pets[0]) {
-    win.webContents.send('pet:switch', mainPet)
-    await sleep(1500)
-  }
+  // 无条件切换到 mainPet（幂等）：当前宠物由渲染层启动顺序决定，不能假设 pets[0]
+  win.webContents.send('pet:switch', mainPet)
+  await sleep(1500)
   console.log(`主宠物: ${mainPet}（含 wiggle=${petHasAction(mainPet, 'wiggle')}），切换目标: ${otherPet || '无'}`)
 
   // A. 手动打断（menu 源不挂转移定时器）：手动切 sleep，等 4.5s（>sleep 一轮 2.4s）
@@ -85,13 +91,17 @@ async function run() {
 
   // B. reminder 打断
   console.log('B. reminder 打断测试…')
-  win.webContents.send('reminder:fire', { id: 'boundary-test', text: '边界测试提醒' })
-  await sleep(1500)
-  const wiggleSeen = events.filter(e => actionOf(e) === 'wiggle').length > 0
-  const tWiggle = events.filter(e => actionOf(e) === 'wiggle').pop()?.t || Date.now()
-  await sleep(4000)
-  const strayB = events.filter(e => e.t > tWiggle + 500 && ['sleep', 'stretch'].includes(actionOf(e)))
-  results.push(['B reminder 打断', (wiggleSeen && strayB.length === 0) ? 'PASS' : 'FAIL', `wiggle 出现=${wiggleSeen}，之后 4s 意外转移 ${strayB.length} 次`])
+  if (!petHasAction(mainPet, 'wiggle')) {
+    results.push(['B reminder 打断', 'SKIP', `主宠物 ${mainPet} 无 wiggle 动作（提醒播 wiggle 的前提缺失）`])
+  } else {
+    win.webContents.send('reminder:fire', { id: 'boundary-test', text: '边界测试提醒' })
+    await sleep(1500)
+    const wiggleSeen = events.filter(e => actionOf(e) === 'wiggle').length > 0
+    const tWiggle = events.filter(e => actionOf(e) === 'wiggle').pop()?.t || Date.now()
+    await sleep(4000)
+    const strayB = events.filter(e => e.t > tWiggle + 500 && ['sleep', 'stretch'].includes(actionOf(e)))
+    results.push(['B reminder 打断', (wiggleSeen && strayB.length === 0) ? 'PASS' : 'FAIL', `wiggle 出现=${wiggleSeen}，之后 4s 意外转移 ${strayB.length} 次`])
+  }
 
   // C. 多宠切换瞬间（需 ≥2 宠物）
   if (otherPet) {
@@ -101,7 +111,7 @@ async function run() {
     const tC = Date.now()
     // 等一次 random 动作出现，随后 500ms 内切宠物
     let switched = false
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 60; i++) { // 30s 窗口，覆盖 ≥2 个 random 周期（12s）
       if (events.some(e => e.t > tC && isRandomAction(e))) {
         win.webContents.send('pet:switch', otherPet)
         switched = true
