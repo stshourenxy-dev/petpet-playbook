@@ -20,6 +20,8 @@ jobs:
         python-version: ['3.9', '3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # check_refs.py 需全历史验证 docs/14 引用的 commit
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
