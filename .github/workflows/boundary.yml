@@ -1,6 +1,6 @@
 name: Boundary Test
 
-# 集成边界测试（Electron headless，xvfb）——GLM 审计建议 Layer 2
+# 集成边界测试（Electron headless，xvfb）——AI 工具审计建议 Layer 2
 # 覆盖：主进程 IPC / preload / 多宠切换 / 转移链守卫（boundary-test.cjs 四场景）
 # 依赖 fixtures：demo 复制 x2（fixture-a 手动补 wiggle 动作复用 knead 表，供 reminder 场景）
 on:
