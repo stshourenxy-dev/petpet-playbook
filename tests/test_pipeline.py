@@ -255,7 +255,7 @@ def test_gen_prompt_negative_word_detection():
 
 def test_clean_text_strips_invisible():
     """零宽/BiDi/控制字符应被剥离（Qwen 审计 V-10 提示注入链）"""
-    from pipeline.validate_pet import clean_text, _INVISIBLE_RE
+    from pipeline.validate_pet import _INVISIBLE_RE, clean_text
     assert clean_text('红苕\u200b\u200b') == '红苕'
     assert clean_text('\u202e恶意覆盖\u202c') == '恶意覆盖'
     assert clean_text('正常\u00ad文本') == '正常文本'
@@ -265,7 +265,7 @@ def test_clean_text_strips_invisible():
 
 def test_validate_pet_rejects_text_injection():
     """带零宽/伪系统消息的 pet.json 应被拒（间接注入载体）"""
-    from pipeline.validate_pet import validate_pet_json, clean_text
+    from pipeline.validate_pet import validate_pet_json
     data = {
         'version': 3, 'id': 'inject-test', 'name': '测试',
         'bubbles': ['\u200b\u200b\u200b'],  # 纯零宽 → 剥离后为空
