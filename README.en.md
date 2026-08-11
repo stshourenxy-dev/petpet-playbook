@@ -125,7 +125,7 @@ graph LR
 ```
 petpet-playbook/
 ├── README.md            this file (overview + nav) / README.en.md (English)
-├── docs/                methodology docs (00-12 + review checklist, Chinese)
+├── docs/                methodology docs (00-12 + review checklist + security & release checklist, Chinese)
 ├── pipeline/            runnable scripts (select/remove-bg/clean/make-sheet/validate/prompt)
 ├── schema/              machine-readable contracts (pet.json v3 + 16-field profile)
 ├── templates/           fill-in templates
