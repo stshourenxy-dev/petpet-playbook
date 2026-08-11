@@ -1,6 +1,6 @@
 # PetPet Playbook — AI 助手工作指南
 
-> 让各类 AI 助手（Claude Code / OpenClaw 等）能正确地为 PetPet Playbook 项目工作：
+> 让各类 AI 编程助手能正确地为 PetPet Playbook 项目工作：
 > 读契约、跑管线、排查问题。受众 = 正在用本仓库做宠物桌宠的人 + 他们的 AI 助手。
 
 ## 项目是什么
@@ -47,6 +47,8 @@ cd viewer && npm run build && npm start    # 构建后启动
 - 标准 8 动作注册表：`idle/sleep/sniff/wiggle/run/belly/poop/stretch`
 - 精灵表契约：**总宽 ≤ 16384px**（WebGL 硬上限，超了黑屏）、PNG 或 WebP 无损、透明底
 - activity.json：动作切换时追加（同动作不重复、idle 不记、滚动上限 100 条）
+
+> **提交信息中性**：提交信息、注释和审计记录不得包含具体 AI 工具、厂商或模型名称，一律用「AI 工具」「AI 助手」等通用表述。
 
 ## 排查清单（高频事故，详见 docs/07）
 

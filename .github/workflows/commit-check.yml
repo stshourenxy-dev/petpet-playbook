@@ -1,0 +1,48 @@
+name: Commit Message Check
+
+# 检测项（非门禁）：提交信息不得包含具体 AI 工具/厂商/模型名称。
+# 禁词正则由 GitHub Secret（AI_TOOL_NAME_REGEX）提供，仓库内不落明文；
+# Secret 未配置时本 job 自动跳过，配置后生效。未配分支保护时仅事后报警。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check-commit-message:
+    name: 提交信息中性检查（检测项）
+    runs-on: ubuntu-latest
+    if: ${{ secrets.AI_TOOL_NAME_REGEX != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 检查本次触发涉及的提交信息
+        env:
+          REGEX: ${{ secrets.AI_TOOL_NAME_REGEX }}
+          BASE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            COMMITS=$(git rev-list origin/main..HEAD)
+          elif [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            COMMITS=$(git rev-list --max-count=20 HEAD)
+          else
+            COMMITS=$(git rev-list "$BASE".."$SHA")
+          fi
+          FAIL=0
+          for c in $COMMITS; do
+            if git log -1 --format=%B "$c" | grep -qE "$REGEX"; then
+              echo "::error::commit $c 提交信息包含具体 AI 工具名（禁词命中），请改用通用表述（AI 工具 / AI 助手）"
+              FAIL=1
+            fi
+          done
+          if [ $FAIL -eq 0 ]; then
+            echo "✅ 提交信息中性检查通过"
+          else
+            exit 1
+          fi
