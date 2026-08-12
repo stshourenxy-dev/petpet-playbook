@@ -1,0 +1,46 @@
+{
+    "version": 3,
+    "id": "dingdang-demo",
+    "name": "叮当",
+    "style": "photoreal",
+    "theme": "orange",
+    "bubbles": [
+        "汪！",
+        "摸摸我～",
+        "肚皮要摸摸！"
+    ],
+    "cellWidth": 655,
+    "cellHeight": 655,
+    "actions": {
+        "idle": {
+            "sprite": "idle_sheet.webp",
+            "frames": 25,
+            "fps": 5,
+            "loop": true,
+            "weight": 100,
+            "frameWidth": 655,
+            "frameHeight": 655,
+            "scale": 1,
+            "label": "待机叼鳄鱼",
+            "diary": {
+                "mood": "安逸",
+                "text": "{name}叼着鳄鱼玩具打盹，安静等主人回来。"
+            }
+        },
+        "tangzuoyi": {
+            "sprite": "tangzuoyi_sheet.webp",
+            "frames": 25,
+            "fps": 5,
+            "loop": true,
+            "weight": 10,
+            "frameWidth": 655,
+            "frameHeight": 655,
+            "scale": 1,
+            "label": "躺下作揖",
+            "diary": {
+                "mood": "开心",
+                "text": "{name}仰躺在地，前爪高举作揖，求摸摸！"
+            }
+        }
+    }
+}
