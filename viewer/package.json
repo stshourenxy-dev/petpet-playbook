@@ -15,7 +15,7 @@
     "test:mem": "electron scripts/memtest.cjs"
   },
   "dependencies": {
-    "pixi.js": "^8.6.6"
+    "pixi.js": "^8.20.1"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
